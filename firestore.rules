@@ -7,29 +7,78 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true;
     }
 
+    function queryHasLimit(maximum) {
+      return request.query.limit != null && request.query.limit <= maximum;
+    }
+
+    function validEventWrite() {
+      return request.resource.data.keys().hasAll([
+          'name', 'status', 'visibility', 'schemaVersion', 'updatedAt', 'reportCount', 'draftReportKeys'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'name', 'status', 'visibility', 'schemaVersion', 'updatedAt', 'reportCount', 'draftReportKeys'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.status in ['draft', 'active', 'closed']
+        && request.resource.data.visibility in ['private', 'public']
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.updatedAt is string
+        && request.resource.data.updatedAt.size() <= 40
+        && request.resource.data.reportCount is int
+        && request.resource.data.reportCount >= 0
+        && request.resource.data.reportCount <= 300
+        && request.resource.data.draftReportKeys is list
+        && request.resource.data.draftReportKeys.size() <= 300;
+    }
+
+    function validReportWrite() {
+      return request.resource.data.keys().hasAll(['report', 'published', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['report', 'published', 'updatedAt'])
+        && request.resource.data.report is map
+        && request.resource.data.published is bool
+        && request.resource.data.updatedAt is string
+        && request.resource.data.updatedAt.size() <= 40;
+    }
+
     match /admins/{uid} {
       allow get: if request.auth != null && request.auth.uid == uid;
       allow list, create, update, delete: if false;
     }
 
     match /events/{eventId} {
-      allow get, list: if isPortalAdmin() || resource.data.visibility == 'public';
-      allow create, update, delete: if isPortalAdmin();
+      allow get: if isPortalAdmin() || resource.data.visibility == 'public';
+      allow list: if queryHasLimit(100)
+        && (isPortalAdmin() || resource.data.visibility == 'public');
+      allow create, update: if isPortalAdmin() && validEventWrite();
+      allow delete: if isPortalAdmin();
 
       match /reports/{reportId} {
         function eventIsPublic() {
           return get(/databases/$(database)/documents/events/$(eventId)).data.visibility == 'public';
         }
-        allow get, list: if isPortalAdmin() || (eventIsPublic() && resource.data.published == true);
-        allow create, update, delete: if isPortalAdmin();
+        allow get: if isPortalAdmin() || (eventIsPublic() && resource.data.published == true);
+        allow list: if queryHasLimit(300)
+          && (isPortalAdmin() || (eventIsPublic() && resource.data.published == true));
+        allow create, update: if isPortalAdmin() && validReportWrite();
+        allow delete: if isPortalAdmin();
       }
 
       match /state/{stateId} {
         function eventIsPublic() {
           return get(/databases/$(database)/documents/events/$(eventId)).data.visibility == 'public';
         }
-        allow get, list: if isPortalAdmin() || eventIsPublic();
-        allow create, update, delete: if isPortalAdmin();
+        allow get: if isPortalAdmin() || eventIsPublic();
+        allow list: if isPortalAdmin() && queryHasLimit(50);
+        allow create, update: if isPortalAdmin()
+          && request.resource.data.keys().hasAll(['floodEpisodes', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['floodEpisodes', 'updatedAt'])
+          && request.resource.data.floodEpisodes is list
+          && request.resource.data.floodEpisodes.size() <= 500
+          && request.resource.data.updatedAt is string
+          && request.resource.data.updatedAt.size() <= 40;
+        allow delete: if isPortalAdmin();
       }
     }
 
