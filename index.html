@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="daylight">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDRRMO Tarlac — Sitrep Operations Workspace</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root, [data-theme="daylight"] {
+      --bg-canvas: #F4F5F3;
+      --bg-card: #FFFFFF;
+      --bg-subtle: #F8FAFC;
+      --bg-muted: #EEF1F4;
+      --ink: #1F2A33;
+      --muted: #51606B;
+      --border: #D3D9D6;
+      --border-strong: #B8C2CC;
+      --channel: #2C6586;
+      --deep: #123B54;
+      --shallow: #D6E4EA;
+      --amber: #A85A12;
+      --amber-bg: #FEF3C7;
+      --amber-ring: rgba(168, 90, 18, 0.28);
+      --green: #2F7360;
+      --green-bg: #DCFCE7;
+      --green-ring: rgba(47, 115, 96, 0.28);
+      --brick: #9A332C;
+      --brick-bg: #FEE2E2;
+      --brick-ring: rgba(154, 51, 44, 0.28);
+      --blue-bg: #E0F2FE;
+      --blue-ring: rgba(44, 101, 134, 0.28);
+      --bar-fill: rgba(44, 101, 134, 0.13);
+      --card-shadow: 0 1px 2px 0 rgba(18, 26, 32, 0.04);
+    }
+
+    [data-theme="night"] {
+      --bg-canvas: #121A20;
+      --bg-card: #172129;
+      --bg-subtle: #1C2832;
+      --bg-muted: #22303C;
+      --ink: #DCE4E8;
+      --muted: #9DB0BB;
+      --border: #2A3842;
+      --border-strong: #3B4D5B;
+      --channel: #78AECB;
+      --deep: #1D4E6E;
+      --shallow: rgba(120, 174, 203, 0.15);
+      --amber: #E3A55F;
+      --amber-bg: rgba(227, 165, 95, 0.14);
+      --amber-ring: rgba(227, 165, 95, 0.35);
+      --green: #72B8A0;
+      --green-bg: rgba(114, 184, 160, 0.14);
+      --green-ring: rgba(114, 184, 160, 0.35);
+      --brick: #E58E85;
+      --brick-bg: rgba(229, 142, 133, 0.14);
+      --brick-ring: rgba(229, 142, 133, 0.35);
+      --blue-bg: rgba(120, 174, 203, 0.14);
+      --blue-ring: rgba(120, 174, 203, 0.35);
+      --bar-fill: rgba(120, 174, 203, 0.16);
+      --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35);
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--ink);
+      font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 220ms cubic-bezier(0.22, 0.61, 0.36, 1), color 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+
+    .num-col { font-variant-numeric: tabular-nums; text-align: right; }
+    .big-num { letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+
+    .shadcn-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .shadcn-card-interactive {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--card-shadow);
+      transition: border-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    .shadcn-card-interactive:hover {
+      border-color: var(--channel);
+      background-color: var(--bg-subtle);
+    }
+
+    .shadcn-control {
+      background-color: var(--bg-card);
+      color: var(--ink);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      min-height: 36px;
+      font-size: 13px;
+      font-weight: 500;
+      transition: border-color 120ms ease, background-color 120ms ease;
+    }
+    .shadcn-control:hover {
+      background-color: var(--bg-subtle);
+    }
+    .shadcn-control:focus-visible, .click-target:focus-visible {
+      outline: 2px solid var(--channel);
+      outline-offset: 2px;
+    }
+
+    .shadcn-tabs-list {
+      background-color: var(--bg-muted);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 3px;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .shadcn-tab-btn {
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    .shadcn-tab-btn:hover {
+      color: var(--ink);
+    }
+    .shadcn-tab-btn.is-active {
+      background-color: var(--bg-card);
+      color: var(--ink);
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+
+    .shadcn-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .badge-warning {
+      background-color: var(--amber-bg);
+      color: var(--amber);
+      box-shadow: inset 0 0 0 1px var(--amber-ring);
+    }
+    .badge-success {
+      background-color: var(--green-bg);
+      color: var(--green);
+      box-shadow: inset 0 0 0 1px var(--green-ring);
+    }
+    .badge-error {
+      background-color: var(--brick-bg);
+      color: var(--brick);
+      box-shadow: inset 0 0 0 1px var(--brick-ring);
+    }
+    .badge-water {
+      background-color: var(--blue-bg);
+      color: var(--channel);
+      box-shadow: inset 0 0 0 1px var(--blue-ring);
+    }
+    .badge-neutral {
+      background-color: var(--bg-muted);
+      color: var(--muted);
+      box-shadow: inset 0 0 0 1px var(--border-strong);
+    }
+
+    .hairline-t { border-top: 1px solid var(--border); }
+    .hairline-b { border-bottom: 1px solid var(--border); }
+    .hairline-r { border-right: 1px solid var(--border); }
+
+    .needs-verification {
+      outline: 1.5px dashed var(--amber);
+      outline-offset: -2px;
+      border-radius: 8px;
+    }
+
+    .crossfade-region {
+      transition: opacity 150ms ease-out;
+    }
+    .crossfade-active {
+      opacity: 0.45;
+    }
+
+    @keyframes rowTintFade {
+      0% { background-color: var(--shallow); }
+      100% { background-color: transparent; }
+    }
+    .changed-tint {
+      animation: rowTintFade 1200ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+    }
+
+    .panel-backdrop {
+      background-color: rgba(9, 13, 22, 0.55);
+      backdrop-filter: blur(2px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    .panel-backdrop.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .panel-sheet {
+      background-color: var(--bg-card);
+      border-left: 1px solid var(--border-strong);
+      border-top-left-radius: 16px;
+      border-bottom-left-radius: 16px;
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.14);
+      transform: translateX(24px);
+      opacity: 0;
+      transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    .panel-backdrop.is-open .panel-sheet {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    .panel-backdrop.is-leaving {
+      opacity: 0;
+      transition: opacity 160ms cubic-bezier(0.4, 0, 1, 1);
+    }
+    .panel-backdrop.is-leaving .panel-sheet {
+      transform: translateX(16px);
+      opacity: 0;
+      transition: transform 160ms cubic-bezier(0.4, 0, 1, 1), opacity 160ms cubic-bezier(0.4, 0, 1, 1);
+    }
+
+    @media (max-width: 640px) {
+      .panel-sheet {
+        border-left: none;
+        border-top: 1px solid var(--border-strong);
+        border-top-left-radius: 16px;
+        border-top-right-radius: 16px;
+        border-bottom-left-radius: 0;
+        transform: translateY(24px);
+      }
+      .panel-backdrop.is-open .panel-sheet {
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, .crossfade-region, .panel-backdrop, .panel-sheet, .changed-tint {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- SHADCN STICKY TOP COMMAND BAR -->
+  <header class="hairline-b sticky top-0 z-30 backdrop-blur-md" style="background-color: var(--bg-card);">
+    <div class="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 h-13 py-2 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white shadow-sm" style="background-color: var(--deep);">
+          <i class="ri-radar-line text-sm"></i>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-sm sm:text-base tracking-tight">PDRRMO Tarlac Sitrep</span>
+          <span id="securityRoleCue" class="shadcn-badge badge-neutral">
+            <i class="ri-eye-line"></i>
+            <span>View only</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="shadcn-tabs-list">
+        <button id="navGovBtn" type="button" class="shadcn-tab-btn is-active">
+          <i class="ri-dashboard-horizontal-line"></i>
+          <span>Governor view</span>
+        </button>
+        <button id="navOpcenBtn" type="button" class="shadcn-tab-btn">
+          <i class="ri-edit-box-line"></i>
+          <span>Operations Center entry</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="themeToggleBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5">
+          <i id="themeToggleIcon" class="ri-moon-clear-line"></i>
+          <span id="themeToggleText">Night theme</span>
+        </button>
+        <button id="testSessionCueBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5" style="color: var(--muted);">
+          <i class="ri-timer-line"></i>
+          <span>Session cue</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- SESSION WARNING BANNER -->
+  <div id="sessionWarnBar" class="hidden px-4 py-2 text-xs sm:text-sm font-medium text-center hairline-b" style="background-color: var(--amber-bg); color: var(--amber);">
+    <i class="ri-time-line mr-1"></i>
+    Your session ends in 2 minutes. Your draft is saved.
+    <button id="dismissSessionBtn" type="button" class="ml-3 underline font-bold">Continue session</button>
+  </div>
+
+  <!-- QUIET NEW SITREP PUBLISHED NOTICE -->
+  <div id="newSitrepNoticeBar" class="hidden px-4 py-2 text-xs sm:text-sm font-medium text-center hairline-b" style="background-color: var(--shallow); color: var(--ink);">
+    <i class="ri-notification-badge-line mr-1"></i>
+    <span id="newSitrepNoticeText">Sitrep #31 published.</span>
+    <button id="viewNewSitrepBtn" type="button" class="ml-2 underline font-bold" style="color: var(--channel);">View it</button>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- SCREEN 1: GOVERNOR'S EVENT DASHBOARD (SHADCN SPLIT WORKSPACE)         -->
+  <!-- ===================================================================== -->
+  <main id="govScreen" class="flex-1 w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4 crossfade-region">
+
+    <!-- 1. Shadcn Compact Executive Toolbar Header -->
+    <section class="shadcn-card px-4 py-3.5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+      <div class="space-y-0.5 min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <span id="govSitrepNum" class="px-2.5 py-0.5 rounded-md text-xs font-bold text-white inline-flex items-center gap-1" style="background-color: var(--deep);">
+            <i class="ri-file-list-3-line"></i>
+            <span>Sitrep #31</span>
+          </span>
+          <span id="govDateAndCutoff" class="text-xs font-semibold inline-flex items-center gap-1" style="color: var(--muted);">
+            <i class="ri-time-line"></i>
+            <span>Sep 14, 2026, as of 6:00 PM</span>
+          </span>
+          <span id="govRevisedBadge" class="hidden shadcn-badge badge-warning">
+            <i class="ri-history-line"></i>
+            <span>Revised</span>
+          </span>
+        </div>
+        <h1 id="govEventHeading" class="text-sm sm:text-base font-bold tracking-tight truncate">
+          Effects of the Enhanced Southwest Monsoon and Tropical Cyclones Luis, Maymay, Neneng, Obet, and Pilandok
+        </h1>
+        <p id="govRevisionNoteText" class="hidden text-xs font-medium" style="color: var(--amber);"></p>
+      </div>
+
+      <!-- Compact Inline Shadcn Select Comboboxes with Vertical Separator -->
+      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
+        <div class="flex items-center gap-2">
+          <label for="govSitrepSelect" class="text-xs font-semibold whitespace-nowrap" style="color: var(--muted);">
+            View sitrep:
+          </label>
+          <select id="govSitrepSelect" class="shadcn-control px-2.5 py-1 text-xs sm:text-sm font-bold cursor-pointer"></select>
+        </div>
+
+        <div class="hidden sm:block h-5 w-[1px]" style="background-color: var(--border);"></div>
+
+        <div class="flex items-center gap-2">
+          <label for="govCompareSelect" class="text-xs font-semibold whitespace-nowrap" style="color: var(--muted);">
+            Compare against:
+          </label>
+          <select id="govCompareSelect" class="shadcn-control px-2.5 py-1 text-xs sm:text-sm font-semibold cursor-pointer"></select>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Shadcn 5-Card KPI Bento Strip -->
+    <section aria-label="Headline figures" id="govHeadlineLedger" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <!-- Populated dynamically by app.js -->
+    </section>
+
+    <!-- 3. Shadcn Workspace View Tabs + Source Trigger -->
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+      <div class="shadcn-tabs-list" role="tablist">
+        <button type="button" data-gov-view="split" class="gov-view-tab shadcn-tab-btn is-active">
+          <i class="ri-layout-column-line"></i>
+          <span>Overview &amp; flood gauge</span>
+        </button>
+        <button type="button" data-gov-view="matrix" class="gov-view-tab shadcn-tab-btn">
+          <i class="ri-table-2"></i>
+          <span>18-municipality full ledger</span>
+        </button>
+        <button type="button" data-gov-view="damage" class="gov-view-tab shadcn-tab-btn">
+          <i class="ri-shield-flash-line"></i>
+          <span>Incidents, damage &amp; field ops</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs" style="color: var(--muted);">
+        <span id="govPopSourceLine" class="shadcn-badge badge-neutral"></span>
+      </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- GOV TAB 1: ASYMMETRIC 12-COLUMN SPLIT (TIMELINE LEFT, RANKING RIGHT) -->
+    <!-- =================================================================== -->
+    <section id="govView_split" class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+
+      <!-- Left 7 Columns: What Changed (Hairline Divided) + Flood Episode Gauge -->
+      <div class="xl:col-span-7 space-y-4">
+
+        <!-- What Changed Card -->
+        <div class="shadcn-card overflow-hidden">
+          <div class="px-4 py-3 hairline-b flex flex-wrap items-center justify-between gap-2" style="background-color: var(--bg-subtle);">
+            <div class="flex items-center gap-2">
+              <i class="ri-git-commit-line text-base" style="color: var(--channel);"></i>
+              <h2 id="govWhatChangedHeading" class="text-xs sm:text-sm font-bold">What changed since the previous sitrep</h2>
+            </div>
+            <span class="text-[11px]" style="color: var(--muted);">Select any barangay to open readings</span>
+          </div>
+          <div id="govWhatChangedColumns" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x" style="border-color: var(--border);">
+            <!-- Populated dynamically by app.js -->
+          </div>
+        </div>
+
+        <!-- Signature Flood Episode River-Gauge Timeline + Synchronized ARG Rainfall Strip -->
+        <div class="shadcn-card overflow-hidden">
+          <div class="px-4 py-3 hairline-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2" style="background-color: var(--bg-subtle);">
+            <div>
+              <h2 class="text-xs sm:text-sm font-bold">Flood episode timeline and peak depth gauge (Aug 8 to Sep 14, 2026)</h2>
+              <p class="text-[11px]" style="color: var(--muted);">
+                Horizontal bars show duration flooded across sitreps #3 to #31; repeat waves appear as separate segments.
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 text-xs shrink-0">
+              <span class="shadcn-badge badge-water">● Flooded</span>
+              <span class="shadcn-badge badge-warning">▲ Rising</span>
+              <span class="shadcn-badge badge-water">▼ Receding</span>
+              <span class="shadcn-badge badge-success">✓ Subsided</span>
+            </div>
+          </div>
+
+          <div class="p-3 sm:p-4 space-y-1" id="govFloodTimelineRows">
+            <!-- Populated dynamically by app.js -->
+          </div>
+
+          <!-- Synchronized ARG Daily Rainfall Bar Strip (Aug 8 to Sep 14, 2026) -->
+          <div id="govArgStripContainer" class="px-3 sm:px-4 pb-3.5 pt-1">
+            <!-- Populated dynamically by app.js -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right 5 Columns: Pinned 18-LGU Ranking with Inline Proportional Bars -->
+      <div class="xl:col-span-5 shadcn-card overflow-hidden">
+        <div class="px-4 py-3 hairline-b flex flex-wrap items-center justify-between gap-2" style="background-color: var(--bg-subtle);">
+          <div>
+            <h2 class="text-xs sm:text-sm font-bold">18-municipality impact ranking</h2>
+            <p class="text-[11px]" style="color: var(--muted);">Select any municipality row to inspect trend and source</p>
+          </div>
+          <div class="shadcn-tabs-list">
+            <button type="button" data-dist="ALL" class="dist-filter-btn shadcn-tab-btn is-active text-xs px-2 py-1">All 18</button>
+            <button type="button" data-dist="1" class="dist-filter-btn shadcn-tab-btn text-xs px-2 py-1">D1</button>
+            <button type="button" data-dist="2" class="dist-filter-btn shadcn-tab-btn text-xs px-2 py-1">D2</button>
+            <button type="button" data-dist="3" class="dist-filter-btn shadcn-tab-btn text-xs px-2 py-1">D3</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="hairline-b font-semibold" style="color: var(--muted); background-color: var(--bg-subtle);">
+                <th class="py-2 pl-4 pr-2">Municipality</th>
+                <th class="py-2 px-2 num-col">Affected persons (change)</th>
+                <th class="py-2 px-2 num-col">In ECs now</th>
+                <th class="py-2 pl-2 pr-4 num-col">Flooded</th>
+              </tr>
+            </thead>
+            <tbody id="govCompactRankingTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- GOV TAB 2: FULL 10-COLUMN 18-MUNICIPALITY LEDGER                    -->
+    <!-- =================================================================== -->
+    <section id="govView_matrix" class="hidden shadcn-card overflow-hidden">
+      <div class="p-4 hairline-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" style="background-color: var(--bg-subtle);">
+        <div>
+          <h2 class="text-sm font-bold">Complete 18-municipality population and evacuation ledger</h2>
+          <p class="text-xs" style="color: var(--muted);">Grouped by congressional district or sorted province-wide. Select any row to open its detail sheet.</p>
+        </div>
+        <select id="govRankSortSelect" class="shadcn-control px-3 py-1.5">
+          <option value="dist_grouped">Grouped by district, ranked by affected persons</option>
+          <option value="pers_desc">Province-wide by affected persons</option>
+          <option value="ec_desc">Province-wide by people in ECs now</option>
+          <option value="flood_desc">Province-wide by flooded areas now</option>
+        </select>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs sm:text-sm">
+          <thead>
+            <tr class="hairline-b font-semibold" style="color: var(--muted); background-color: var(--bg-subtle);">
+              <th class="py-2.5 pl-4 pr-3">Municipality</th>
+              <th class="py-2.5 px-2">District</th>
+              <th class="py-2.5 px-2.5 num-col">Affected barangays</th>
+              <th class="py-2.5 px-2.5 num-col">Affected families</th>
+              <th class="py-2.5 px-2.5 num-col">Affected persons</th>
+              <th class="py-2.5 px-2.5 num-col">Served persons</th>
+              <th class="py-2.5 px-2.5 num-col">Evacuation centers</th>
+              <th class="py-2.5 px-2.5 num-col">People in ECs now</th>
+              <th class="py-2.5 px-2.5 num-col">People in ECs cumulative</th>
+              <th class="py-2.5 pl-2.5 pr-4 num-col">Flooded areas</th>
+            </tr>
+          </thead>
+          <tbody id="govRankingTbody"></tbody>
+          <tfoot id="govRankingTfoot" class="hairline-t font-bold" style="background-color: var(--bg-subtle);"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- GOV TAB 3: INCIDENTS, DAMAGE, HUMANITARIAN AID & FIELD OVERSIGHT    -->
+    <!-- =================================================================== -->
+    <section id="govView_damage" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 shadcn-card p-4 space-y-3.5">
+        <div class="hairline-b pb-2.5 flex items-center gap-2">
+          <i class="ri-truck-line text-base" style="color: var(--channel);"></i>
+          <div>
+            <h2 class="text-sm font-bold">Field oversight</h2>
+            <p class="text-xs" style="color: var(--muted);">Personnel and assets checked in, and teams deployed</p>
+          </div>
+        </div>
+        <div id="govFieldOversightContainer" class="space-y-3 text-xs sm:text-sm"></div>
+      </div>
+
+      <div class="lg:col-span-7 shadcn-card p-4 space-y-3.5">
+        <div class="hairline-b pb-2.5 flex flex-wrap items-baseline justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <i class="ri-building-2-line text-base" style="color: var(--channel);"></i>
+            <h2 class="text-sm font-bold">Incidents, damage, and humanitarian assistance</h2>
+          </div>
+          <span id="govAgriSourceLabel" class="text-xs" style="color: var(--muted);"></span>
+        </div>
+        <div id="govIncidentsDamageContainer" class="space-y-4 text-xs sm:text-sm"></div>
+      </div>
+    </section>
+
+    <!-- Abbreviation Legend Footer -->
+    <footer class="shadcn-card px-4 py-2.5 text-xs flex items-center gap-2" style="color: var(--muted);">
+      <i class="ri-information-line text-sm" style="color: var(--channel);"></i>
+      <div>
+        <strong>Abbreviations:</strong>
+        EC = evacuation center; ARG = automated rain gauge; DSWD = Department of Social Welfare and Development;
+        PSWDO = Provincial Social Welfare and Development Office; DA-OPA = Department of Agriculture Office of the Provincial Agriculturist;
+        DPWH DEO = Department of Public Works and Highways District Engineering Office; MDRRMO = Municipal Disaster Risk Reduction and Management Office.
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- SCREEN 2: OPERATIONS CENTER ENTRY (FULL-WIDTH FLUID WORKSPACE)        -->
+  <!-- ===================================================================== -->
+  <main id="opcenScreen" class="hidden flex-1 w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+
+    <section class="shadcn-card p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div class="space-y-1">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span id="opcenDraftTitle" class="px-2.5 py-0.5 rounded-md text-xs font-bold text-white inline-flex items-center gap-1" style="background-color: var(--channel);">
+            <i class="ri-draft-line"></i>
+            <span>Draft sitrep #31</span>
+          </span>
+          <span class="text-xs font-medium inline-flex items-center gap-1" style="color: var(--muted);">
+            <i class="ri-time-line"></i>
+            <span>6:00 PM cutoff (38 minutes remaining)</span>
+          </span>
+          <span id="opcenSaveStatus" class="shadcn-badge badge-success">
+            <i class="ri-check-double-line"></i>
+            <span>Saved 5:42 PM</span>
+          </span>
+          <span id="opcenLockedBadge" class="hidden shadcn-badge badge-neutral">
+            <i class="ri-lock-2-line"></i>
+            <span>Locked (Published)</span>
+          </span>
+        </div>
+        <p class="text-sm sm:text-base font-bold pt-0.5">
+          Enhanced Southwest Monsoon and Tropical Cyclones Luis, Maymay, Neneng, Obet, and Pilandok
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="opcenOfflineToggleBtn" type="button" class="shadcn-control px-3 py-1.5 inline-flex items-center gap-1.5">
+          <i class="ri-wifi-off-line"></i>
+          <span>Simulate offline mode</span>
+        </button>
+        <button id="opcenReviseBtn" type="button" class="hidden shadcn-control px-3.5 py-1.5 font-semibold inline-flex items-center gap-1.5">
+          <i class="ri-edit-2-line"></i>
+          <span>Revise</span>
+        </button>
+        <button id="opcenPublishBtn" type="button" class="px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-2 text-white shadow-sm" style="background-color: var(--deep); min-height: 36px;">
+          <i class="ri-send-plane-fill"></i>
+          <span id="opcenPublishBtnLabel">Publish sitrep #31</span>
+          <span id="opcenOpenWarningsBadge" class="px-2 py-0.5 rounded text-xs font-bold text-white" style="background-color: var(--amber);">2 warnings</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Sitrep Archive Quick-Loader (#3 to #31) + ARG CSV & PDF Scanners -->
+    <section class="shadcn-card p-4 space-y-3" style="background-color: var(--bg-subtle);">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div class="flex items-start gap-2.5">
+          <i class="ri-file-pdf-2-line text-lg mt-0.5" style="color: var(--channel);"></i>
+          <div>
+            <h2 class="text-xs sm:text-sm font-bold">Load any of the 25 official sitrep records (#3 to #31), import ARG CSV, or scan a sitrep PDF</h2>
+            <p class="text-xs" style="color: var(--muted);">
+              Select any sitrep below to inspect or edit its flood episodes, 18-municipality population matrix, agriculture losses, and relief aid.
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <label for="opcenArgCsvInput" class="shadcn-control px-3.5 py-1.5 cursor-pointer inline-flex items-center gap-2">
+            <i class="ri-heavy-showers-line text-sm" style="color: var(--channel);"></i>
+            <input id="opcenArgCsvInput" type="file" accept=".csv" class="hidden" />
+            <span id="opcenArgCsvStatus">Import ARG rainfall CSV</span>
+          </label>
+          <label for="opcenPdfInput" class="shadcn-control px-3.5 py-1.5 cursor-pointer inline-flex items-center gap-2">
+            <i class="ri-upload-cloud-2-line text-sm" style="color: var(--channel);"></i>
+            <input id="opcenPdfInput" type="file" accept=".pdf,.txt" class="hidden" />
+            <span id="opcenPdfStatus">Select sitrep PDF file</span>
+          </label>
+        </div>
+      </div>
+      <div id="opcenSitrepPills" class="flex flex-wrap items-center gap-1.5"></div>
+    </section>
+
+    <!-- 5-Step Encoder Stepper Bar -->
+    <nav aria-label="Daily encoding routine" class="grid grid-cols-1 sm:grid-cols-5 gap-2.5" id="opcenStepBar">
+      <button type="button" data-step="1" class="opcen-step-btn shadcn-card-interactive p-3 text-left">
+        <div class="font-bold text-xs sm:text-sm flex items-center gap-1.5">
+          <i class="ri-water-flash-line" style="color: var(--channel);"></i>
+          <span>1. Flood episodes</span>
+        </div>
+        <div id="step1StateLabel" class="text-xs mt-1 font-medium" style="color: var(--amber);">Has warnings</div>
+      </button>
+      <button type="button" data-step="2" class="opcen-step-btn shadcn-card-interactive p-3 text-left">
+        <div class="font-bold text-xs sm:text-sm flex items-center gap-1.5">
+          <i class="ri-group-line" style="color: var(--channel);"></i>
+          <span>2. Population and evacuation</span>
+        </div>
+        <div id="step2StateLabel" class="text-xs mt-1 font-medium" style="color: var(--amber);">In progress</div>
+      </button>
+      <button type="button" data-step="3" class="opcen-step-btn shadcn-card-interactive p-3 text-left">
+        <div class="font-bold text-xs sm:text-sm flex items-center gap-1.5">
+          <i class="ri-alert-line" style="color: var(--channel);"></i>
+          <span>3. Incidents and damage</span>
+        </div>
+        <div class="text-xs mt-1 font-medium" style="color: var(--green);">Done</div>
+      </button>
+      <button type="button" data-step="4" class="opcen-step-btn shadcn-card-interactive p-3 text-left">
+        <div class="font-bold text-xs sm:text-sm flex items-center gap-1.5">
+          <i class="ri-truck-line" style="color: var(--channel);"></i>
+          <span>4. Field oversight</span>
+        </div>
+        <div class="text-xs mt-1 font-medium" style="color: var(--green);">Done</div>
+      </button>
+      <button type="button" data-step="5" class="opcen-step-btn shadcn-card-interactive p-3 text-left">
+        <div class="font-bold text-xs sm:text-sm flex items-center gap-1.5">
+          <i class="ri-shield-check-line" style="color: var(--channel);"></i>
+          <span>5. Review and publish</span>
+        </div>
+        <div class="text-xs mt-1 font-medium" style="color: var(--muted);">Not started</div>
+      </button>
+    </nav>
+
+    <!-- FRAME A: STEP 1, FLOOD EPISODES -->
+    <section id="opcenFrame_1" class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-8 shadcn-card overflow-hidden">
+        <div class="p-4 hairline-b flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-bold">Open and monitored flood episodes</h2>
+            <p class="text-xs" style="color: var(--muted);">
+              Use checkboxes to mark unchanged rows "Still the same" at once, or open inline fields with "Update reading".
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="bulkSameBtn" type="button" class="shadcn-control px-3 py-1.5 inline-flex items-center gap-1.5">
+              <i class="ri-check-double-line"></i>
+              <span>Mark selected "Still the same"</span>
+            </button>
+            <button id="toggleEmptyFloodStateBtn" type="button" class="shadcn-control px-3 py-1.5" style="color: var(--muted);">
+              Preview empty state
+            </button>
+          </div>
+        </div>
+
+        <div id="opcenEmptyFloodBox" class="hidden p-8 text-center space-y-2">
+          <i class="ri-drop-line text-2xl" style="color: var(--muted);"></i>
+          <div class="text-sm font-bold">No open flood episodes for this event yet</div>
+          <p class="text-xs max-w-md mx-auto" style="color: var(--muted);">
+            When the first LGU flood report arrives, use the "Add new flood" form on the right to pick a municipality, match the barangay name, and record the first depth reading.
+          </p>
+        </div>
+
+        <div id="opcenFloodTableWrap" class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="hairline-b font-semibold" style="color: var(--muted); background-color: var(--bg-subtle);">
+                <th class="py-2.5 pl-4 pr-2 w-8"><input id="chkAllFloods" type="checkbox" class="w-4 h-4 rounded" /></th>
+                <th class="py-2.5 px-2">Barangay and municipality</th>
+                <th class="py-2.5 px-2">Scope and sitio</th>
+                <th class="py-2.5 px-2">Onset and duration</th>
+                <th class="py-2.5 px-2 num-col">Last reading</th>
+                <th class="py-2.5 px-2">Status and verification</th>
+                <th class="py-2.5 pl-2 pr-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="opcenFloodTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="lg:col-span-4 space-y-4">
+        <div class="shadcn-card p-4 space-y-3">
+          <h3 class="text-xs sm:text-sm font-bold flex items-center gap-1.5">
+            <i class="ri-error-warning-line" style="color: var(--amber);"></i>
+            <span>Warnings (select to jump to row)</span>
+          </h3>
+          <div id="opcenWarningsPanel" class="space-y-2 text-xs"></div>
+        </div>
+
+        <div class="shadcn-card p-4 space-y-3">
+          <h3 class="text-xs sm:text-sm font-bold flex items-center gap-1.5">
+            <i class="ri-add-circle-line" style="color: var(--channel);"></i>
+            <span>Add new flood</span>
+          </h3>
+          <form id="addFloodEpisodeForm" class="space-y-3 text-xs sm:text-sm">
+            <div>
+              <label for="newFloodMuni" class="block font-medium mb-1">Municipality</label>
+              <select id="newFloodMuni" class="shadcn-control w-full px-2.5 py-1.5"></select>
+            </div>
+            <div>
+              <label for="newFloodBrgy" class="block font-medium mb-1">Barangay (matches alternate spellings)</label>
+              <input id="newFloodBrgy" type="text" required placeholder="Type barangay (e.g. Matapitap or Matalapitap)" class="shadcn-control w-full px-2.5 py-1.5" />
+              <div id="brgyAliasHint" class="text-[11px] mt-1" style="color: var(--muted);">Matches official PSGC barangay list and spelling aliases.</div>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="newFloodScope" class="block font-medium mb-1">Scope</label>
+                <select id="newFloodScope" class="shadcn-control w-full px-2 py-1.5">
+                  <option value="Portions of barangay">Portion of barangay</option>
+                  <option value="Whole barangay">Whole barangay</option>
+                </select>
+              </div>
+              <div>
+                <label for="newFloodStatus" class="block font-medium mb-1">Status</label>
+                <select id="newFloodStatus" class="shadcn-control w-full px-2 py-1.5">
+                  <option value="Still Flooded">Flooded</option>
+                  <option value="Rising">Rising</option>
+                  <option value="Receding">Receding</option>
+                  <option value="Subsided">Subsided</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="newFloodMinFt" class="block font-medium mb-1">Depth min (ft)</label>
+                <input id="newFloodMinFt" type="number" step="0.1" min="0" required placeholder="1.5" class="shadcn-control w-full px-2.5 py-1.5 num-col" />
+              </div>
+              <div>
+                <label for="newFloodMaxFt" class="block font-medium mb-1">Depth max (ft)</label>
+                <input id="newFloodMaxFt" type="number" step="0.1" min="0" required placeholder="2.5" class="shadcn-control w-full px-2.5 py-1.5 num-col" />
+              </div>
+            </div>
+            <div>
+              <label for="newFloodSitio" class="block font-medium mb-1">Sitio or purok (Do not enter names)</label>
+              <input id="newFloodSitio" type="text" placeholder="e.g. Purok 1 and Sitio Bacao" class="shadcn-control w-full px-2.5 py-1.5" />
+            </div>
+            <button type="submit" class="w-full py-2 rounded-lg font-semibold text-white text-xs sm:text-sm inline-flex items-center justify-center gap-1.5" style="background-color: var(--channel); min-height: 36px;">
+              <i class="ri-save-3-line"></i>
+              <span>Save flood episode</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- FRAME B: STEP 2, POPULATION AND EVACUATION MATRIX -->
+    <section id="opcenFrame_2" class="hidden space-y-4">
+      <div class="shadcn-card overflow-hidden">
+        <div class="p-4 hairline-b flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-bold">Population and evacuation matrix (18 municipalities)</h2>
+            <p class="text-xs" style="color: var(--muted);">
+              Each cell shows the previous sitrep's value faintly underneath. Totals are calculated automatically.
+            </p>
+          </div>
+          <button id="demoCumDecreaseBtn" type="button" class="shadcn-control px-3 py-1.5 inline-flex items-center gap-1.5" style="color: var(--brick);">
+            <i class="ri-error-warning-line"></i>
+            <span>Test cumulative decrease warning (Camiling)</span>
+          </button>
+        </div>
+
+        <div id="cumDecreaseAlertBox" class="hidden m-4 p-3 rounded-lg flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold" style="background-color: var(--brick-bg); box-shadow: inset 0 0 0 1px var(--brick-ring); color: var(--brick);">
+          <span id="cumDecreaseAlertText">Cumulative cannot go down. Check this entry.</span>
+          <button id="restoreCumDecreaseBtn" type="button" class="underline text-xs font-bold">Restore previous value</button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="hairline-b font-semibold" style="color: var(--muted); background-color: var(--bg-subtle);">
+                <th class="py-2.5 pl-4 pr-2">Municipality</th>
+                <th class="py-2.5 px-2 num-col">Affected barangays</th>
+                <th class="py-2.5 px-2 num-col">Families cumulative</th>
+                <th class="py-2.5 px-2 num-col">Persons cumulative</th>
+                <th class="py-2.5 px-2 num-col">Served families</th>
+                <th class="py-2.5 px-2 num-col">Served persons</th>
+                <th class="py-2.5 px-2 num-col">Evacuation centers</th>
+                <th class="py-2.5 px-2 num-col">EC families cumulative</th>
+                <th class="py-2.5 px-2 num-col">EC families now</th>
+                <th class="py-2.5 px-2 num-col">EC persons cumulative</th>
+                <th class="py-2.5 px-2 num-col">EC persons now</th>
+                <th class="py-2.5 pl-2 pr-4">Status note</th>
+              </tr>
+            </thead>
+            <tbody id="opcenPopMatrixTbody"></tbody>
+            <tfoot id="opcenPopMatrixTfoot" class="hairline-t font-bold" style="background-color: var(--bg-subtle);"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="shadcn-card p-4 space-y-2">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs sm:text-sm font-bold">Pre-emptive evacuation</h3>
+          <span class="text-xs" style="color: var(--muted);">Recorded separately from active evacuation center counts</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs sm:text-sm">
+          <div><strong>Paniqui:</strong> 112 families, 342 persons (Brgy. Barang and Matalapitap)</div>
+          <div><strong>Moncada:</strong> 48 families, 138 persons (Brgy. Ablang-Sapang)</div>
+          <div><strong>La Paz:</strong> 27 families, 75 persons (Brgy. San Isidro)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 3: INCIDENTS AND DAMAGE -->
+    <section id="opcenFrame_3" class="hidden shadcn-card p-5 space-y-4">
+      <h2 class="text-sm font-bold hairline-b pb-2">Incidents, casualties, agriculture, infrastructure, roads, and power</h2>
+      <p class="text-xs" style="color: var(--muted);">Do not enter names of people. Record counts and agency as-of times only.</p>
+      <div id="opcenStep3Content" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm"></div>
+    </section>
+
+    <!-- STEP 4: FIELD OVERSIGHT -->
+    <section id="opcenFrame_4" class="hidden shadcn-card p-5 space-y-4">
+      <h2 class="text-sm font-bold hairline-b pb-2">Field oversight (check-ins and deployments)</h2>
+      <p class="text-xs" style="color: var(--muted);">Do not enter names of people. Every deployment requires a no-return reason if return time is not logged.</p>
+      <div id="opcenStep4Content" class="space-y-2.5 text-xs sm:text-sm"></div>
+    </section>
+
+    <!-- STEP 5: REVIEW AND PUBLISH -->
+    <section id="opcenFrame_5" class="hidden shadcn-card p-5 space-y-4">
+      <h2 class="text-sm font-bold hairline-b pb-2">Review counts and open warnings before publishing</h2>
+      <div id="opcenStep5Content" class="space-y-3 text-xs sm:text-sm"></div>
+    </section>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- SCREEN 3: SHADCN SHEET DETAIL PANEL (SIDE PANEL / BOTTOM SHEET)       -->
+  <!-- ===================================================================== -->
+  <div id="detailBackdrop" class="panel-backdrop fixed inset-0 z-40 flex justify-end items-end sm:items-stretch">
+    <aside
+      id="detailSheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dpTitle"
+      tabindex="-1"
+      class="panel-sheet w-full sm:max-w-xl max-h-[88vh] sm:max-h-full overflow-y-auto p-5 sm:p-6 flex flex-col justify-between focus:outline-none"
+    >
+      <div class="space-y-5">
+        <div class="flex items-start justify-between gap-4 hairline-b pb-3.5">
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="shadcn-badge badge-neutral"><i class="ri-eye-line"></i> View only</span>
+              <span id="dpStatusMarker" class="text-xs font-semibold" style="color: var(--channel);"></span>
+            </div>
+            <h2 id="dpTitle" class="text-lg sm:text-xl font-bold pt-0.5"></h2>
+            <p id="dpAsOfLine" class="text-xs" style="color: var(--muted);"></p>
+          </div>
+          <button id="closeDetailBtn" type="button" class="shadcn-control px-3 py-1.5 inline-flex items-center gap-1">
+            <i class="ri-close-line text-base"></i>
+            <span>Close</span>
+          </button>
+        </div>
+
+        <div class="shadcn-card p-4 space-y-2" style="background-color: var(--bg-subtle);">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <div id="dpMainFigure" class="text-2xl sm:text-3xl font-bold big-num"></div>
+            <div id="dpChangeCue" class="text-xs sm:text-sm font-semibold"></div>
+          </div>
+
+          <div id="dpComparePickerRow" class="flex items-center gap-2 pt-1 text-xs" style="color: var(--muted);">
+            <label for="dpCompareSelect">Compare against earlier sitrep:</label>
+            <select id="dpCompareSelect" class="shadcn-control px-2 py-1 text-xs" style="min-height: 30px;"></select>
+          </div>
+
+          <p id="dpPeakSentence" class="text-xs sm:text-sm font-semibold pt-1"></p>
+          <p id="dpShareSentence" class="text-xs" style="color: var(--muted);"></p>
+        </div>
+
+        <div class="space-y-1.5">
+          <h3 id="dpChartHeading" class="text-xs font-bold"></h3>
+          <div class="shadcn-card p-3 relative h-52">
+            <canvas id="dpChartCanvas"></canvas>
+          </div>
+          <div id="dpRainfallStripNote" class="hidden p-2.5 rounded-lg text-xs" style="border: 1px dashed var(--border-strong); color: var(--muted);">
+            <i class="ri-heavy-showers-line mr-1"></i>
+            Rainfall data not connected (unavailable since Aug 8, 2026)
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <h3 id="dpTableHeading" class="text-xs font-bold"></h3>
+          <div class="shadcn-card overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead id="dpTableHead" class="hairline-b font-semibold" style="color: var(--muted); background-color: var(--bg-subtle);"></thead>
+                <tbody id="dpTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="shadcn-card p-3.5 space-y-1.5 text-xs" style="background-color: var(--bg-subtle);">
+          <h3 class="font-bold">Notes and sources</h3>
+          <div id="dpNotesList" class="space-y-1" style="color: var(--muted);"></div>
+          <div class="pt-2 hairline-t text-[11px]" style="color: var(--muted);">
+            <strong>Legend:</strong> EC = evacuation center; ARG = automated rain gauge; MDRRMO = Municipal Disaster Risk Reduction and Management Office; DSWD = Department of Social Welfare and Development.
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- PUBLISH / REVISE CONFIRMATION DIALOG -->
+  <div id="publishModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(9, 13, 22, 0.55); backdrop-filter: blur(2px);">
+    <div class="shadcn-card w-full max-w-md p-5 space-y-4">
+      <h3 id="pubModalHeading" class="text-base font-bold">Publish sitrep</h3>
+      <div id="pubModalBody" class="text-xs sm:text-sm space-y-2"></div>
+      <div id="reviseInputWrap" class="hidden space-y-1">
+        <label for="reviseNoteField" class="block text-xs font-semibold">Change note (required to revise a published sitrep; do not enter names)</label>
+        <input id="reviseNoteField" type="text" placeholder="e.g. Corrected Camiling cumulative evacuee figure" class="shadcn-control w-full px-3 py-2" />
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-3 hairline-t">
+        <button id="cancelPubModalBtn" type="button" class="shadcn-control px-3.5 py-1.5">Cancel</button>
+        <button id="confirmPubModalBtn" type="button" class="px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-white" style="background-color: var(--deep); min-height: 36px;">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BRIEF CONFIRMATION STATUS BAR -->
+  <div id="statusToast" class="hidden fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold text-white shadow-lg flex items-center gap-2" style="background-color: var(--deep);">
+    <i class="ri-checkbox-circle-fill text-emerald-400"></i>
+    <span id="statusToastMsg">Saved</span>
+  </div>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
