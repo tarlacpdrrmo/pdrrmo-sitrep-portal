@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import {
   initializeAppCheck,
-  ReCaptchaV3Provider
+  ReCaptchaEnterpriseProvider
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app-check.js";
 import {
   getAuth,
@@ -35,13 +35,13 @@ const firebaseConfig = {
 };
 
 export const firebaseApp = initializeApp(firebaseConfig);
-// Add your public reCAPTCHA v3 site key to the matching meta tag in index.html
+// Add your public reCAPTCHA Enterprise site key to the matching meta tag in index.html
 // after registering this app in Firebase App Check. Until then, Firestore Rules
 // remain the access-control boundary; App Check is an additional abuse barrier.
 const appCheckSiteKey = document.querySelector('meta[name="firebase-app-check-site-key"]')?.content.trim();
 export const appCheck = appCheckSiteKey
   ? initializeAppCheck(firebaseApp, {
-      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
       isTokenAutoRefreshEnabled: true
     })
   : null;
