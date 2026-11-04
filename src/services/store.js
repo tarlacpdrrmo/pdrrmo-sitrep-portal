@@ -3,6 +3,7 @@ import { BASE_LGUS, RAW_ARCHIVE, FLOOD_TIMELINE_EPISODES, BARANGAY_ALIASES } fro
 
 const STORAGE_KEY_EPISODES = "pdrrmo_tarlac_flood_episodes_v1";
 const STORAGE_KEY_BASELINE = "pdrrmo_tarlac_flood_baseline_v1";
+const LEGACY_EVENT_ID = "2026-sw-monsoon-luis-maymay";
 
 export function parseReadingTimeMs(timeStr) {
   if (!timeStr) return 0;
@@ -112,6 +113,13 @@ function buildSnapshot(key, raw, prevSnapshot) {
 class SitrepStore {
   constructor() {
     this.listeners = [];
+    this.activeEventId = LEGACY_EVENT_ID;
+    this.activeEventName = "Enhanced Southwest Monsoon and Tropical Cyclones Luis and Maymay (2026)";
+    this.activeEventStatus = "closed";
+    this.activeEventVisibility = "public";
+    this.draftReportKeys = [];
+    this.baseFloodEpisodes = JSON.parse(JSON.stringify(FLOOD_TIMELINE_EPISODES));
+    this.rawArchive = RAW_ARCHIVE;
     this.snapshots = {};
     this.initSnapshots();
     const keys = this.getSortedKeys();
@@ -127,9 +135,10 @@ class SitrepStore {
 
   loadSavedEpisodes() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_EPISODES);
+      const suffix = this.activeEventId === LEGACY_EVENT_ID ? "" : `_${this.activeEventId}`;
+      const saved = localStorage.getItem(`${STORAGE_KEY_EPISODES}${suffix}`);
       if (saved) return JSON.parse(saved);
-      const customBase = localStorage.getItem(STORAGE_KEY_BASELINE);
+      const customBase = localStorage.getItem(`${STORAGE_KEY_BASELINE}${suffix}`);
       if (customBase) return JSON.parse(customBase);
     } catch (e) {
       // ignore storage errors
@@ -139,7 +148,8 @@ class SitrepStore {
 
   persistEpisodes() {
     try {
-      localStorage.setItem(STORAGE_KEY_EPISODES, JSON.stringify(this.floodEpisodes));
+      const suffix = this.activeEventId === LEGACY_EVENT_ID ? "" : `_${this.activeEventId}`;
+      localStorage.setItem(`${STORAGE_KEY_EPISODES}${suffix}`, JSON.stringify(this.floodEpisodes));
     } catch (e) {
       // ignore storage errors
     }
@@ -148,8 +158,9 @@ class SitrepStore {
   // Saves current state as the new baseline so "Reset edits" returns to THIS state
   saveCurrentAsBaseline() {
     try {
-      localStorage.setItem(STORAGE_KEY_BASELINE, JSON.stringify(this.floodEpisodes));
-      localStorage.setItem(STORAGE_KEY_EPISODES, JSON.stringify(this.floodEpisodes));
+      const suffix = this.activeEventId === LEGACY_EVENT_ID ? "" : `_${this.activeEventId}`;
+      localStorage.setItem(`${STORAGE_KEY_BASELINE}${suffix}`, JSON.stringify(this.floodEpisodes));
+      localStorage.setItem(`${STORAGE_KEY_EPISODES}${suffix}`, JSON.stringify(this.floodEpisodes));
     } catch (e) {
       // ignore
     }
@@ -161,17 +172,19 @@ class SitrepStore {
   resetFloodEpisodesToDefault(forceFactory = false) {
     if (forceFactory) {
       try {
-        localStorage.removeItem(STORAGE_KEY_EPISODES);
-        localStorage.removeItem(STORAGE_KEY_BASELINE);
+        const suffix = this.activeEventId === LEGACY_EVENT_ID ? "" : `_${this.activeEventId}`;
+        localStorage.removeItem(`${STORAGE_KEY_EPISODES}${suffix}`);
+        localStorage.removeItem(`${STORAGE_KEY_BASELINE}${suffix}`);
       } catch (e) {}
-      this.floodEpisodes = JSON.parse(JSON.stringify(FLOOD_TIMELINE_EPISODES));
+      this.floodEpisodes = JSON.parse(JSON.stringify(this.baseFloodEpisodes));
     } else {
       let base = null;
       try {
-        const customBase = localStorage.getItem(STORAGE_KEY_BASELINE);
+        const suffix = this.activeEventId === LEGACY_EVENT_ID ? "" : `_${this.activeEventId}`;
+        const customBase = localStorage.getItem(`${STORAGE_KEY_BASELINE}${suffix}`);
         if (customBase) base = JSON.parse(customBase);
       } catch (e) {}
-      this.floodEpisodes = base || JSON.parse(JSON.stringify(FLOOD_TIMELINE_EPISODES));
+      this.floodEpisodes = base || JSON.parse(JSON.stringify(this.baseFloodEpisodes));
       this.persistEpisodes();
     }
     this.cumDecreaseError = null;
@@ -180,10 +193,10 @@ class SitrepStore {
   }
 
   initSnapshots() {
-    const sortedKeys = Object.keys(RAW_ARCHIVE).sort((a, b) => Number(a) - Number(b));
+    const sortedKeys = Object.keys(this.rawArchive).sort((a, b) => Number(a) - Number(b));
     let prev = null;
     sortedKeys.forEach(k => {
-      const snap = buildSnapshot(k, RAW_ARCHIVE[k], prev);
+      const snap = buildSnapshot(k, this.rawArchive[k], prev);
       this.snapshots[k] = snap;
       prev = snap;
     });
@@ -191,6 +204,148 @@ class SitrepStore {
 
   getSortedKeys() {
     return Object.keys(this.snapshots).sort((a, b) => Number(a) - Number(b));
+  }
+
+  getRawEntry(key = this.currentKey) {
+    return this.rawArchive[String(key)] || {};
+  }
+
+  setEventArchive(event) {
+    if (!event?.id || !event.reports || typeof event.reports !== "object") {
+      throw new Error("The event does not contain a valid report archive.");
+    }
+    const reportKeys = Object.keys(event.reports);
+    if (!reportKeys.length) throw new Error("The event has no SITREP records.");
+    this.activeEventId = String(event.id);
+    this.activeEventName = event.name || String(event.id);
+    this.activeEventStatus = event.status || "active";
+    this.activeEventVisibility = event.visibility || "public";
+    this.draftReportKeys = Array.isArray(event.draftReportKeys) ? [...event.draftReportKeys].map(String) : [];
+    this.rawArchive = event.reports;
+    this.baseFloodEpisodes = JSON.parse(JSON.stringify(event.floodEpisodes || []));
+    this.snapshots = {};
+    this.initSnapshots();
+    const keys = this.getSortedKeys();
+    this.currentKey = keys[keys.length - 1];
+    this.compareKey = keys.length > 1 ? keys[keys.length - 2] : this.currentKey;
+    this.floodEpisodes = Array.isArray(event.floodEpisodes)
+      ? JSON.parse(JSON.stringify(event.floodEpisodes))
+      : [];
+    this.cumDecreaseError = null;
+    this.notify();
+  }
+
+  exportEventData() {
+    const reports = JSON.parse(JSON.stringify(this.rawArchive));
+    Object.keys(this.snapshots).forEach(key => {
+      const snap = this.snapshots[key];
+      const raw = reports[key] || {};
+      raw.lguPop = Object.fromEntries(snap.lguRows.map(row => [row.name, [
+        row.brgys, row.famCum, row.persCum, row.servFam, row.servPers,
+        row.ecState, row.ecCount, row.ecFamCum, row.ecFamNow, row.ecPersCum, row.ecPersNow
+      ]]));
+      raw.popTotals = snap.popTotals;
+      raw.revised = snap.revised;
+      raw.revisionNote = snap.revisionNote;
+      reports[key] = raw;
+    });
+    return {
+      id: this.activeEventId,
+      name: this.activeEventName,
+      status: this.activeEventStatus,
+      visibility: this.activeEventVisibility,
+      draftReportKeys: [...this.draftReportKeys],
+      reports,
+      floodEpisodes: JSON.parse(JSON.stringify(this.floodEpisodes))
+    };
+  }
+
+  createNewEvent(name, dateStr) {
+    const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+    const eventId = slug + "-" + Date.now().toString(36);
+    const emptyRow = [0, 0, 0, 0, 0, "-", 0, 0, 0, 0, 0];
+    const blankReport = {
+      updateNo: 1,
+      dateStr,
+      cutoffTime: "6:00 PM",
+      popSource: "PSWDO Disaster Monitoring Report as of " + dateStr,
+      floodSource: "LDRRMOs as of " + dateStr,
+      agriSource: "DA-OPA Damage Assessment Report as of " + dateStr,
+      popTotals: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      lguPop: Object.fromEntries(BASE_LGUS.map(m => [m.name, [...emptyRow]])),
+      muniFloodCounts: {},
+      agriRows: [
+        { commodity: "RICE", lgus: "0", farmers: "0", partialHa: "0", totalHa: "0", valuePhp: 0 },
+        { commodity: "CORN", lgus: "0", farmers: "0", partialHa: "0", totalHa: "0", valuePhp: 0 },
+        { commodity: "TOTAL", lgus: "0", farmers: "0", partialHa: "0", totalHa: "0", valuePhp: 0 }
+      ],
+      agriTotalPhp: 0,
+      infraTotalPhp: 0,
+      dead: 0,
+      injured: 0,
+      missing: 0,
+      housesTotally: 0,
+      housesPartially: 0,
+      assistCols: [0, 0, 0, 0, 0, 0],
+      assistTotalPhp: 0,
+      assistByLgu: {}
+    };
+    const event = {
+      id: eventId,
+      name: name.trim(),
+      status: "draft",
+      visibility: "private",
+      draftReportKeys: ["1"],
+      reports: { "1": blankReport },
+      floodEpisodes: []
+    };
+    this.setEventArchive(event);
+    return event;
+  }
+
+  addNextSitrep(dateStr, cutoffTime = "6:00 PM") {
+    const keys = this.getSortedKeys();
+    const previousKey = keys[keys.length - 1];
+    const previous = this.rawArchive[previousKey];
+    const nextNo = Math.max(...keys.map(key => Number(this.rawArchive[key]?.updateNo || key))) + 1;
+    const raw = JSON.parse(JSON.stringify(previous));
+    raw.updateNo = nextNo;
+    raw.dateStr = dateStr;
+    raw.cutoffTime = cutoffTime;
+    raw.popSource = "PSWDO / DSWD Disaster Monitoring Report as of " + dateStr;
+    raw.floodSource = "LDRRMOs as of " + dateStr;
+    raw.agriSource = "DA-OPA Damage Assessment Report as of " + dateStr;
+    raw.revised = false;
+    raw.revisionNote = "";
+    this.rawArchive = { ...this.rawArchive, [String(nextNo)]: raw };
+    this.draftReportKeys = [...new Set([...this.draftReportKeys, String(nextNo)])];
+    this.snapshots = {};
+    this.initSnapshots();
+    this.currentKey = String(nextNo);
+    this.compareKey = previousKey;
+    this.notify();
+    return nextNo;
+  }
+
+  markCurrentSitrepPublished() {
+    this.draftReportKeys = this.draftReportKeys.filter(key => key !== String(this.currentKey));
+    if (this.activeEventStatus === "draft") this.activeEventStatus = "active";
+    this.activeEventVisibility = "public";
+  }
+
+  updateReportSummary(values) {
+    const raw = this.rawArchive[String(this.currentKey)];
+    const snap = this.getCurrentSnapshot();
+    if (!raw || !snap) return;
+    ["dead", "injured", "missing", "housesTotally", "housesPartially", "infraTotalPhp", "assistTotalPhp"]
+      .forEach(field => {
+        const value = Number(values[field]);
+        if (!Number.isFinite(value) || value < 0) return;
+        raw[field] = value;
+        snap[field] = value;
+      });
+    this.touchSaved();
+    this.notify();
   }
 
   getCurrentSnapshot() {

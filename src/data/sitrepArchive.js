@@ -1151,6 +1151,14 @@ export const RAW_ARCHIVE = {
     ],
     agriTotalPhp: 460453024.35,
     infraTotalPhp: 2582000000.0,
+    casualtyByLgu: [
+      { mun: "Capas", dead: 2, injured: 0, missing: 0 },
+      { mun: "Mayantoc", dead: 1, injured: 0, missing: 0 },
+      { mun: "Pura", dead: 2, injured: 0, missing: 0 },
+      { mun: "Sta. Ignacia", dead: 1, injured: 0, missing: 0 },
+      { mun: "Tarlac City", dead: 2, injured: 0, missing: 1 },
+      { mun: "La Paz", dead: 0, injured: 1, missing: 0 }
+    ],
     dead: 8, injured: 1, missing: 1,
     housesTotally: 35, housesPartially: 40,
     assistCols: [14222184.0, 488614.43, 8549832.99, 792000.0, 5020553.0, 612964.0],

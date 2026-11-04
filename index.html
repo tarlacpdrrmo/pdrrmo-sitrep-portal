@@ -290,13 +290,18 @@
           <i class="ri-dashboard-horizontal-line"></i>
           <span>Governor view</span>
         </button>
-        <button id="navOpcenBtn" type="button" class="shadcn-tab-btn">
+        <button id="navOpcenBtn" type="button" class="shadcn-tab-btn hidden">
           <i class="ri-edit-box-line"></i>
           <span>Operations Center entry</span>
         </button>
       </div>
 
       <div class="flex items-center gap-2">
+        <span id="firebaseAuthStatus" class="text-xs hidden sm:inline" style="color: var(--muted);">Firebase not connected</span>
+        <button id="firebaseSignInBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5">
+          <i class="ri-google-fill"></i><span>Admin sign in</span>
+        </button>
+        <button id="firebaseSignOutBtn" type="button" class="shadcn-control px-3 py-1 hidden">Sign out</button>
         <button id="themeToggleBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5">
           <i id="themeToggleIcon" class="ri-moon-clear-line"></i>
           <span id="themeToggleText">Night theme</span>
@@ -305,6 +310,10 @@
           <i class="ri-timer-line"></i>
           <span>Session cue</span>
         </button>
+      </div>
+      <div id="firebaseAdminUidWrap" class="hidden w-full text-xs" style="color: var(--muted);">
+        Signed in account UID: <code id="firebaseAdminUid" class="select-all"></code>
+        <span>Ask the Firebase project owner to add this UID at <code>admins/{uid}</code> with <code>enabled: true</code>.</span>
       </div>
     </div>
   </header>
@@ -332,6 +341,7 @@
     <section class="shadcn-card px-4 py-3.5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
       <div class="space-y-0.5 min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
+          <span id="govEventName" class="text-xs font-bold" style="color: var(--ink);"></span>
           <span id="govSitrepNum" class="px-2.5 py-0.5 rounded-md text-xs font-bold text-white inline-flex items-center gap-1" style="background-color: var(--deep);">
             <i class="ri-file-list-3-line"></i>
             <span>Sitrep #31</span>
@@ -369,6 +379,17 @@
           <select id="govCompareSelect" class="shadcn-control px-2.5 py-1 text-xs sm:text-sm font-semibold cursor-pointer"></select>
         </div>
       </div>
+    </section>
+
+    <section class="shadcn-card px-4 py-3 flex flex-wrap items-center gap-2.5">
+      <label for="govEventSelect" class="text-xs font-bold">Event archive</label>
+      <select id="govEventSelect" class="shadcn-control px-2 py-1.5 text-xs max-w-sm">
+        <option value="2026-sw-monsoon-luis-maymay">2026 SW Monsoon and TCs Luis &amp; Maymay</option>
+      </select>
+      <button id="govBackupBtn" type="button" class="shadcn-control px-3 py-1.5 text-xs inline-flex items-center gap-1.5">
+        <i class="ri-download-2-line"></i><span>Download JSON backup</span>
+      </button>
+      <span id="govFirebaseStatus" class="text-xs" style="color: var(--muted);">Loading event archive…</span>
     </section>
 
     <!-- 2. Shadcn 5-Card KPI Bento Strip -->
@@ -568,6 +589,7 @@
     <section class="shadcn-card p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
       <div class="space-y-1">
         <div class="flex flex-wrap items-center gap-2.5">
+          <span id="opcenEventName" class="text-xs font-bold" style="color: var(--ink);"></span>
           <span id="opcenDraftTitle" class="px-2.5 py-0.5 rounded-md text-xs font-bold text-white inline-flex items-center gap-1" style="background-color: var(--channel);">
             <i class="ri-draft-line"></i>
             <span>Draft sitrep #31</span>
@@ -633,6 +655,29 @@
         </div>
       </div>
       <div id="opcenSitrepPills" class="flex flex-wrap items-center gap-1.5"></div>
+      <div class="flex flex-wrap items-center gap-2 pt-2 hairline-t">
+        <label class="text-xs font-semibold" for="firebaseEventSelect">Event archive</label>
+        <select id="firebaseEventSelect" class="shadcn-control px-2 py-1.5 text-xs max-w-xs">
+          <option value="2026-sw-monsoon-luis-maymay">2026 SW Monsoon and TCs Luis &amp; Maymay</option>
+        </select>
+        <button id="firebaseNewEventBtn" type="button" class="shadcn-control px-3 py-1.5 text-xs hidden">
+          <i class="ri-add-line"></i> New event
+        </button>
+        <button id="firebaseNextSitrepBtn" type="button" class="shadcn-control px-3 py-1.5 text-xs hidden">
+          <i class="ri-file-add-line"></i> Add next SitRep
+        </button>
+        <button id="firebaseSaveDraftBtn" type="button" class="shadcn-control px-3 py-1.5 text-xs hidden">
+          <i class="ri-save-3-line"></i> Save draft to Firebase
+        </button>
+        <button id="firebaseBackupBtn" type="button" class="shadcn-control px-3 py-1.5 text-xs inline-flex items-center gap-1.5">
+          <i class="ri-download-2-line"></i><span>Download JSON backup</span>
+        </button>
+        <label id="firebaseRestoreLabel" for="firebaseRestoreInput" class="shadcn-control px-3 py-1.5 text-xs cursor-pointer inline-flex items-center gap-1.5 hidden">
+          <i class="ri-upload-2-line"></i><span>Restore JSON to Firebase</span>
+          <input id="firebaseRestoreInput" type="file" accept="application/json,.json" class="hidden" />
+        </label>
+        <span id="firebaseBackupStatus" class="text-xs" style="color: var(--muted);">Bundled archive loaded</span>
+      </div>
     </section>
 
     <!-- 5-Step Encoder Stepper Bar -->

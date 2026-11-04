@@ -1,5 +1,4 @@
 // src/services/pdfScanner.js
-import { RAW_ARCHIVE } from "../data/sitrepArchive.js";
 
 export async function initPdfWorker() {
   if (!window.pdfjsLib) return;
@@ -46,7 +45,7 @@ export async function scanSitrepPdfFile(file, store) {
 
   // Fall back to nearest archived SitRep if an unindexed number is uploaded
   if (!store.snapshots[detectedKey]) {
-    const available = Object.keys(RAW_ARCHIVE).map(Number).sort((a, b) => a - b);
+    const available = store.getSortedKeys().map(Number).sort((a, b) => a - b);
     const target = Number(detectedKey) || 31;
     const closest = available.reduce((prev, curr) =>
       Math.abs(curr - target) < Math.abs(prev - target) ? curr : prev

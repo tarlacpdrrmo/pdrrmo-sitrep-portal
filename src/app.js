@@ -1,8 +1,13 @@
 // src/app.js
-import { BASE_LGUS, RAW_ARCHIVE, FIELD_CHECKINS, FIELD_DEPLOYMENTS, getFieldOversightBySitrep, BARANGAY_ALIASES } from "./data/sitrepArchive.js";
+import { BASE_LGUS, getFieldOversightBySitrep, BARANGAY_ALIASES } from "./data/sitrepArchive.js";
 import { store } from "./services/store.js";
 import { initPdfWorker, scanSitrepPdfFile } from "./services/pdfScanner.js";
 import { ARG_STATION_META, ARG_DAILY_SERIES, getArgStatsForSitrep, getArg38DayTimeline, parseArgCsvFile } from "./services/argService.js";
+import {
+  BACKUP_SCHEMA_VERSION, downloadBackup, importBackupToFirebase,
+  isPortalAdmin, listPortalEvents, loadPortalEvent,
+  signInAdmin, signOutUser, validateBackup, watchAuth
+} from "./services/firebaseService.js";
 
 const TARLAC_POP_2024 = BASE_LGUS.reduce((s, m) => s + (m.pop2024 || 0), 0);
 
@@ -90,6 +95,13 @@ function showStatusToast(text) {
   window._toastTimer = setTimeout(() => el.classList.add("hidden"), 2600);
 }
 
+function getActiveFieldOversight(updateNo) {
+  if (store.activeEventId !== "2026-sw-monsoon-luis-maymay") {
+    return { checkins: [], deployments: [] };
+  }
+  return getFieldOversightBySitrep(updateNo);
+}
+
 function populateSitrepSelects() {
   const govSel = document.getElementById("govSitrepSelect");
   const compSel = document.getElementById("govCompareSelect");
@@ -159,9 +171,14 @@ function renderGovernorScreen() {
   const comp = store.getCompareSnapshot();
   const tot = snap.popTotals;
   const cTot = comp.popTotals;
-  const argCurr = getArgStatsForSitrep(snap.updateNo);
+  const isLegacyEvent = store.activeEventId === "2026-sw-monsoon-luis-maymay";
+  const argCurr = isLegacyEvent
+    ? getArgStatsForSitrep(snap.updateNo)
+    : { rain24hMm: 0, max15mMm: 0, cumMm: 0, status: "No ARG data for this event" };
   const scopedEpisodes = store.getEpisodesForSitrep(snap);
 
+  document.getElementById("govEventName").textContent = store.activeEventName;
+  document.getElementById("govEventHeading").textContent = store.activeEventName;
   document.getElementById("govSitrepNum").innerHTML = `<i class="ri-file-list-3-line"></i><span>Sitrep #${snap.updateNo}</span>`;
   document.getElementById("govDateAndCutoff").innerHTML = `<i class="ri-time-line"></i><span>${snap.dateStr}, as of ${snap.cutoffTime}</span>`;
   const revBadge = document.getElementById("govRevisedBadge");
@@ -233,6 +250,9 @@ function renderGovernorScreen() {
       sub: `${ARG_STATION_META.stationName} (${argCurr.cumMm} mm cum.)`
     }
   ];
+  if (!isLegacyEvent) {
+    headlines.splice(headlines.findIndex(item => item.type === "arg_rainfall"), 1);
+  }
 
   document.getElementById("govHeadlineLedger").innerHTML = headlines.map(h => `
     <button
@@ -593,6 +613,12 @@ function renderArgSynchronizedStrip(snap) {
   }
   if (!argWrap) return;
 
+  if (store.activeEventId !== "2026-sw-monsoon-luis-maymay") {
+    argWrap.classList.add("hidden");
+    return;
+  }
+  argWrap.classList.remove("hidden");
+
   const days38 = getArg38DayTimeline();
   const maxDayMm = Math.max(1, ...days38.map(d => d.totalMm || 0));
   const argStat = getArgStatsForSitrep(snap.updateNo);
@@ -639,9 +665,9 @@ function renderArgSynchronizedStrip(snap) {
 }
 
 function renderFieldAndIncidents(snap) {
-  const rawEntry = RAW_ARCHIVE[String(snap.updateNo)] || {};
+  const rawEntry = store.getRawEntry(store.currentKey);
   const agriRows = (rawEntry.agriRows || []).filter(r => r.commodity !== "TOTAL");
-  const fieldOps = getFieldOversightBySitrep(snap.updateNo);
+  const fieldOps = getActiveFieldOversight(snap.updateNo);
 
   const activeUnits = fieldOps.checkins.filter(c => c.state === "active");
   const activePax = activeUnits.reduce((sum, c) => sum + (c.pax || 0), 0);
@@ -736,14 +762,9 @@ function renderFieldAndIncidents(snap) {
   const infraMain = snap.infraTotalPhp > 0 ? fmtPhp(snap.infraTotalPhp) : "Assessment pending";
   const assistMain = snap.assistTotalPhp > 0 ? fmtPhp(snap.assistTotalPhp) : "Assessment pending";
 
-  const casualtyMunis = [
-    { mun: "Capas", dead: 2, injured: 0, missing: 0 },
-    { mun: "Tarlac City", dead: 2, injured: 0, missing: 1 },
-    { mun: "Pura", dead: 2, injured: 0, missing: 0 },
-    { mun: "Mayantoc", dead: 1, injured: 0, missing: 0 },
-    { mun: "Sta. Ignacia", dead: 1, injured: 0, missing: 0 },
-    { mun: "La Paz", dead: 0, injured: 1, missing: 0 }
-  ];
+  const casualtyMunis = Array.isArray(rawEntry.casualtyByLgu) && rawEntry.casualtyByLgu.length
+    ? rawEntry.casualtyByLgu
+    : [{ mun: "Municipality breakdown not encoded", dead: "—", injured: "—", missing: "—" }];
 
   document.getElementById("govIncidentsDamageContainer").innerHTML = `
     <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border); background-color: var(--bg-card);">
@@ -891,6 +912,7 @@ function renderOpcenScreen() {
   const prevSnap = store.snapshots[store.getPreviousKey(store.currentKey)] || snap;
   const scopedEpisodes = store.getEpisodesForSitrep(snap);
 
+  document.getElementById("opcenEventName").textContent = store.activeEventName;
   document.getElementById("opcenDraftTitle").innerHTML = `<i class="ri-draft-line"></i><span>Editing Sitrep #${snap.updateNo} (${snap.dateStr})</span>`;
   document.getElementById("opcenPublishBtnLabel").textContent = isOfflineSimulated ? "Connect to publish" : `Publish sitrep #${snap.updateNo}`;
   document.getElementById("opcenSaveStatus").innerHTML = isOfflineSimulated
@@ -1134,7 +1156,87 @@ function renderOpcenScreen() {
     </div>
   `;
 
-  const opcenFieldOps = getFieldOversightBySitrep(snap.updateNo);
+  const summaryForm = document.createElement("form");
+  summaryForm.className = "md:col-span-2 p-4 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3";
+  summaryForm.style.cssText = "background-color: var(--bg-subtle); border: 1px solid var(--border);";
+  summaryForm.innerHTML = '<div class="col-span-2 sm:col-span-4 font-bold">Edit report-wide counts and totals</div>';
+  const summaryFields = [
+    ["dead", "Dead", snap.dead, "1"],
+    ["injured", "Injured", snap.injured, "1"],
+    ["missing", "Missing", snap.missing, "1"],
+    ["housesTotally", "Houses totally damaged", snap.housesTotally, "1"],
+    ["housesPartially", "Houses partially damaged", snap.housesPartially, "1"],
+    ["infraTotalPhp", "Infrastructure damage (PHP)", snap.infraTotalPhp, "0.01"],
+    ["assistTotalPhp", "Humanitarian assistance (PHP)", snap.assistTotalPhp, "0.01"]
+  ];
+  summaryFields.forEach(([name, labelText, value, step]) => {
+    const label = document.createElement("label");
+    label.className = "text-xs font-semibold space-y-1";
+    label.textContent = labelText;
+    const input = document.createElement("input");
+    input.name = name;
+    input.type = "number";
+    input.min = "0";
+    input.step = step;
+    input.value = value || 0;
+    input.required = true;
+    input.className = "shadcn-control block w-full px-2 py-1.5 font-normal";
+    label.append(input);
+    summaryForm.append(label);
+  });
+  const summarySave = document.createElement("button");
+  summarySave.type = "submit";
+  summarySave.className = "shadcn-control px-3 py-1.5 text-xs font-bold col-span-2 sm:col-span-4 justify-self-start";
+  summarySave.textContent = "Save report summary";
+  summaryForm.append(summarySave);
+  summaryForm.addEventListener("submit", event => {
+    event.preventDefault();
+    store.updateReportSummary(Object.fromEntries(new FormData(summaryForm)));
+    showStatusToast("Updated report-wide counts and totals.");
+  });
+  document.getElementById("opcenStep3Content").append(summaryForm);
+
+  const summaryForm = document.createElement("form");
+  summaryForm.className = "md:col-span-2 p-4 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3";
+  summaryForm.style.cssText = "background-color: var(--bg-subtle); border: 1px solid var(--border);";
+  summaryForm.innerHTML = '<div class="col-span-2 sm:col-span-4 font-bold">Edit report-wide counts and totals</div>';
+  const summaryFields = [
+    ["dead", "Dead", snap.dead, "1"],
+    ["injured", "Injured", snap.injured, "1"],
+    ["missing", "Missing", snap.missing, "1"],
+    ["housesTotally", "Houses totally damaged", snap.housesTotally, "1"],
+    ["housesPartially", "Houses partially damaged", snap.housesPartially, "1"],
+    ["infraTotalPhp", "Infrastructure damage (PHP)", snap.infraTotalPhp, "0.01"],
+    ["assistTotalPhp", "Humanitarian assistance (PHP)", snap.assistTotalPhp, "0.01"]
+  ];
+  summaryFields.forEach(([name, labelText, value, step]) => {
+    const label = document.createElement("label");
+    label.className = "text-xs font-semibold space-y-1";
+    label.textContent = labelText;
+    const input = document.createElement("input");
+    input.name = name;
+    input.type = "number";
+    input.min = "0";
+    input.step = step;
+    input.value = value || 0;
+    input.required = true;
+    input.className = "shadcn-control block w-full px-2 py-1.5 font-normal";
+    label.append(input);
+    summaryForm.append(label);
+  });
+  const summarySave = document.createElement("button");
+  summarySave.type = "submit";
+  summarySave.className = "shadcn-control px-3 py-1.5 text-xs font-bold col-span-2 sm:col-span-4 justify-self-start";
+  summarySave.textContent = "Save report summary";
+  summaryForm.append(summarySave);
+  summaryForm.addEventListener("submit", event => {
+    event.preventDefault();
+    store.updateReportSummary(Object.fromEntries(new FormData(summaryForm)));
+    showStatusToast("Updated report-wide counts and totals.");
+  });
+  document.getElementById("opcenStep3Content").append(summaryForm);
+
+  const opcenFieldOps = getActiveFieldOversight(snap.updateNo);
   document.getElementById("opcenStep4Content").innerHTML = opcenFieldOps.deployments.map(d => `
     <div class="p-3 rounded-xl flex flex-wrap items-center justify-between gap-2" style="background-color: var(--bg-subtle); border: 1px solid var(--border);">
       <div><strong>${d.unit}</strong> — ${d.dest} (${d.assets}, ${d.dispatched})</div>
@@ -1744,6 +1846,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   navOpcenBtn.addEventListener("click", () => {
+    if (!window.pdrrmoFirebaseAdmin) {
+      showStatusToast("Sign in with an approved administrator account to open Operations Center.");
+      return;
+    }
     opcenScreen.classList.remove("hidden");
     govScreen.classList.add("hidden");
     navOpcenBtn.classList.add("is-active");
@@ -1935,7 +2041,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     pubModal.classList.add("hidden");
   });
 
-  document.getElementById("confirmPubModalBtn").addEventListener("click", () => {
+  document.getElementById("confirmPubModalBtn").addEventListener("click", async () => {
     const snap = store.getCurrentSnapshot();
     if (isReviseFlow) {
       const note = document.getElementById("reviseNoteField").value.trim();
@@ -1944,9 +2050,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
       store.markRevised(note);
+      try {
+        await syncCurrentEventToFirebase();
+      } catch (error) {
+        showStatusToast(`Could not sync revision: ${error.message}`);
+        return;
+      }
       pubModal.classList.add("hidden");
       showStatusToast(`Sitrep #${snap.updateNo} marked as Revised`);
     } else {
+      try {
+        await syncCurrentEventToFirebase(true);
+        await refreshFirebaseEventOptions(true);
+      } catch (error) {
+        showStatusToast(`Could not publish to Firebase: ${error.message}`);
+        return;
+      }
       pubModal.classList.add("hidden");
       document.getElementById("opcenLockedBadge").classList.remove("hidden");
       document.getElementById("opcenReviseBtn").classList.remove("hidden");
@@ -1974,6 +2093,235 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeDetailPanel();
+  });
+
+  const authStatus = document.getElementById("firebaseAuthStatus");
+  const signInBtn = document.getElementById("firebaseSignInBtn");
+  const signOutBtn = document.getElementById("firebaseSignOutBtn");
+  const adminUidWrap = document.getElementById("firebaseAdminUidWrap");
+  const adminUid = document.getElementById("firebaseAdminUid");
+  const opcenNav = document.getElementById("navOpcenBtn");
+  const restoreLabel = document.getElementById("firebaseRestoreLabel");
+  const backupStatus = document.getElementById("firebaseBackupStatus");
+  const eventSelect = document.getElementById("firebaseEventSelect");
+  const govEventSelect = document.getElementById("govEventSelect");
+  const govFirebaseStatus = document.getElementById("govFirebaseStatus");
+  const govBackupBtn = document.getElementById("govBackupBtn");
+  const newEventBtn = document.getElementById("firebaseNewEventBtn");
+  const nextSitrepBtn = document.getElementById("firebaseNextSitrepBtn");
+  const saveDraftBtn = document.getElementById("firebaseSaveDraftBtn");
+
+  async function syncCurrentEventToFirebase(publish = false) {
+    if (!window.pdrrmoFirebaseAdmin) throw new Error("Sign in as an approved administrator first.");
+    if (publish) {
+      store.markCurrentSitrepPublished();
+    }
+    const event = store.exportEventData();
+    await importBackupToFirebase({
+      schemaVersion: BACKUP_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      events: [event]
+    });
+  }
+
+  async function refreshFirebaseEventOptions(admin = false) {
+    try {
+      const events = await listPortalEvents(admin);
+      const options = events.length ? events : [{
+        id: store.activeEventId,
+        name: store.activeEventName
+      }];
+      eventSelect.replaceChildren();
+      govEventSelect.replaceChildren();
+      options.forEach(event => {
+        const option = document.createElement("option");
+        option.value = event.id;
+        option.textContent = event.name || event.id;
+        eventSelect.append(option);
+        govEventSelect.append(option.cloneNode(true));
+      });
+      eventSelect.value = options.some(event => event.id === store.activeEventId)
+        ? store.activeEventId
+        : options[0].id;
+      govEventSelect.value = eventSelect.value;
+      if (events.length) {
+        const event = await loadPortalEvent(eventSelect.value, admin);
+        store.setEventArchive(event);
+        backupStatus.textContent = `Loaded ${event.name} from Firebase`;
+      } else if (!events.length) {
+        backupStatus.textContent = "Using bundled archive; no Firebase event has been imported yet.";
+      }
+    } catch (error) {
+      backupStatus.textContent = `Firebase archive unavailable: ${error.message}`;
+    }
+  }
+
+  signInBtn.addEventListener("click", async () => {
+    try {
+      await signInAdmin();
+    } catch (error) {
+      authStatus.textContent = `Sign-in failed: ${error.message}`;
+    }
+  });
+  signOutBtn.addEventListener("click", async () => {
+    try { await signOutUser(); }
+    catch (error) { authStatus.textContent = `Sign-out failed: ${error.message}`; }
+  });
+
+  watchAuth(async user => {
+    signInBtn.classList.toggle("hidden", Boolean(user));
+    signOutBtn.classList.toggle("hidden", !user);
+    adminUidWrap.classList.toggle("hidden", !user);
+    adminUid.textContent = user?.uid || "";
+    window.pdrrmoFirebaseAdmin = false;
+    let admin = false;
+    if (user) {
+      authStatus.textContent = `Signed in: ${user.email || "Google account"}`;
+      try { admin = await isPortalAdmin(user); }
+      catch (error) { authStatus.textContent = `Signed in; Firebase setup pending: ${error.message}`; }
+      if (!admin) {
+        authStatus.textContent = "Signed in, but this account is not enabled as a portal administrator.";
+      }
+    } else {
+      authStatus.textContent = "Public view · Firebase sign-in available for staff";
+    }
+    window.pdrrmoFirebaseAdmin = admin;
+    opcenNav.classList.toggle("hidden", !admin);
+    restoreLabel.classList.toggle("hidden", !admin);
+    newEventBtn.classList.toggle("hidden", !admin);
+    nextSitrepBtn.classList.toggle("hidden", !admin);
+    saveDraftBtn.classList.toggle("hidden", !admin);
+    if (!admin) {
+      document.getElementById("govScreen").classList.remove("hidden");
+      document.getElementById("opcenScreen").classList.add("hidden");
+      document.getElementById("navGovBtn").classList.add("is-active");
+      opcenNav.classList.remove("is-active");
+    }
+    await refreshFirebaseEventOptions(admin);
+    govFirebaseStatus.textContent = backupStatus.textContent;
+  });
+
+  eventSelect.addEventListener("change", async () => {
+    if (eventSelect.value === store.activeEventId) return;
+    try {
+      const event = await loadPortalEvent(eventSelect.value, Boolean(window.pdrrmoFirebaseAdmin));
+      store.setEventArchive(event);
+      govEventSelect.value = eventSelect.value;
+      backupStatus.textContent = `Loaded ${event.name} from Firebase`;
+    } catch (error) {
+      showStatusToast(`Could not load event: ${error.message}`);
+    }
+  });
+
+  govEventSelect.addEventListener("change", async () => {
+    if (govEventSelect.value === store.activeEventId) return;
+    try {
+      const admin = Boolean(window.pdrrmoFirebaseAdmin);
+      const event = await loadPortalEvent(govEventSelect.value, admin);
+      store.setEventArchive(event);
+      eventSelect.value = govEventSelect.value;
+      backupStatus.textContent = "Loaded " + event.name + " from Firebase";
+      govFirebaseStatus.textContent = backupStatus.textContent;
+    } catch (error) {
+      showStatusToast("Could not load event: " + error.message);
+    }
+  });
+
+  newEventBtn.addEventListener("click", () => {
+    if (!window.pdrrmoFirebaseAdmin) return;
+    const name = window.prompt("Enter the new disturbance or event name:");
+    if (!name?.trim()) return;
+    const dateStr = window.prompt("Enter the date of the first SITREP (for example, Nov 4, 2026):");
+    if (!dateStr?.trim()) return;
+    try {
+      const event = store.createNewEvent(name.trim(), dateStr.trim());
+      const option = document.createElement("option");
+      option.value = event.id;
+      option.textContent = event.name + " (draft on this device)";
+      eventSelect.append(option);
+      govEventSelect.append(option.cloneNode(true));
+      eventSelect.value = event.id;
+      govEventSelect.value = event.id;
+      backupStatus.textContent = "New event draft created. Publish its first SITREP to make it public and save it to Firebase.";
+      showStatusToast("Started a separate event archive.");
+    } catch (error) {
+      showStatusToast("Could not create event: " + error.message);
+    }
+  });
+
+  nextSitrepBtn.addEventListener("click", () => {
+    if (!window.pdrrmoFirebaseAdmin) return;
+    const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const dateStr = window.prompt("Enter the date for the next SITREP:", today);
+    if (!dateStr?.trim()) return;
+    const cutoff = window.prompt("Enter the SITREP cutoff time:", "6:00 PM");
+    if (!cutoff?.trim()) return;
+    const number = store.addNextSitrep(dateStr.trim(), cutoff.trim());
+    backupStatus.textContent = "SitREP #" + number + " is a local draft. Publish it to save the update to Firebase.";
+    showStatusToast("Created draft SitREP #" + number + ".");
+  });
+
+  saveDraftBtn.addEventListener("click", async () => {
+    try {
+      if (!window.pdrrmoFirebaseAdmin) throw new Error("Sign in with an enabled administrator account first.");
+      await syncCurrentEventToFirebase(false);
+      await refreshFirebaseEventOptions(true);
+      backupStatus.textContent = "Draft saved to Firebase. It remains hidden from public viewers until published.";
+      showStatusToast("Saved draft to Firebase.");
+    } catch (error) {
+      showStatusToast("Could not save draft: " + error.message);
+    }
+  });
+
+  document.getElementById("firebaseBackupBtn").addEventListener("click", async () => {
+    try {
+      const admin = Boolean(window.pdrrmoFirebaseAdmin);
+      const eventSummaries = await listPortalEvents(admin);
+      const events = [];
+      for (const summary of eventSummaries) events.push(await loadPortalEvent(summary.id, admin));
+      if (!events.length) events.push(store.exportEventData());
+      downloadBackup({
+        schemaVersion: BACKUP_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        events: events.map(({ id, name, status, visibility, draftReportKeys, reports, floodEpisodes }) => ({
+          id, name, status, visibility, draftReportKeys, reports, floodEpisodes
+        }))
+      }, `pdrrmo-sitrep-backup-${new Date().toISOString().slice(0, 10)}.json`);
+      backupStatus.textContent = `Downloaded JSON backup for ${events.length} event(s).`;
+    } catch (error) {
+      const event = store.exportEventData();
+      downloadBackup({
+        schemaVersion: BACKUP_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        events: [event]
+      }, `pdrrmo-sitrep-backup-${new Date().toISOString().slice(0, 10)}.json`);
+      backupStatus.textContent = `Downloaded current event backup. Firebase list error: ${error.message}`;
+    }
+  });
+  govBackupBtn.addEventListener("click", () => {
+    document.getElementById("firebaseBackupBtn").click();
+    govFirebaseStatus.textContent = "Preparing JSON backup…";
+    window.setTimeout(() => {
+      govFirebaseStatus.textContent = backupStatus.textContent;
+    }, 800);
+  });
+
+  document.getElementById("firebaseRestoreInput").addEventListener("change", async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (!window.pdrrmoFirebaseAdmin) throw new Error("Sign in with an enabled administrator account before restoring.");
+      const backup = validateBackup(JSON.parse(await file.text()));
+      const summary = backup.events.map(item => `${item.name || item.id}: ${Object.keys(item.reports).length} reports`).join("\n");
+      if (!window.confirm(`Restore or update these Firebase event records? Existing matching records will be updated.\n\n${summary}`)) return;
+      const count = await importBackupToFirebase(backup);
+      await refreshFirebaseEventOptions(true);
+      backupStatus.textContent = `Restored ${count} event(s) to Firebase.`;
+    } catch (error) {
+      backupStatus.textContent = `Restore failed: ${error.message}`;
+    } finally {
+      event.target.value = "";
+    }
   });
 
   renderGovernorScreen();
