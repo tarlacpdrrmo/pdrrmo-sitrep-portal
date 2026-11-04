@@ -768,7 +768,7 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Anao": 6, "Moncada": 19, "Paniqui": 8, "Pura": 2, "Ramos": 2, "Gerona": 2 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "10,120", partialHa: "11,173.31", totalHa: "2,197.46", valuePhp: 397900724.19 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
       { commodity: "TOTAL", lgus: "18", farmers: "10,136", partialHa: "11,189.14", totalHa: "2,213.29", valuePhp: 399018424.19 }
     ],
     agriTotalPhp: 399018424.19,
@@ -810,7 +810,7 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 15, "Paniqui": 6, "Pura": 1, "Ramos": 2, "Gerona": 3, "Concepcion": 1 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "11,074", partialHa: "10,792.78", totalHa: "2,859.40", valuePhp: 420337698.96 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
       { commodity: "TOTAL", lgus: "18", farmers: "11,090", partialHa: "10,808.61", totalHa: "2,875.23", valuePhp: 421455398.96 }
     ],
     agriTotalPhp: 421455398.96,
@@ -852,7 +852,7 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 12, "Paniqui": 8, "Ramos": 2, "Gerona": 3, "Concepcion": 1 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "11,074", partialHa: "10,792.78", totalHa: "2,859.40", valuePhp: 420337698.96 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
       { commodity: "TOTAL", lgus: "18", farmers: "11,090", partialHa: "10,808.61", totalHa: "2,875.23", valuePhp: 421455398.96 }
     ],
     agriTotalPhp: 421455398.96,
@@ -894,7 +894,7 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 12, "Paniqui": 6, "Ramos": 1, "Gerona": 1, "Concepcion": 1 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "11,074", partialHa: "10,792.78", totalHa: "2,859.40", valuePhp: 420337698.96 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
       { commodity: "TOTAL", lgus: "18", farmers: "11,090", partialHa: "10,808.61", totalHa: "2,875.23", valuePhp: 421455398.96 }
     ],
     agriTotalPhp: 421455398.96,
@@ -936,13 +936,13 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 9, "Paniqui": 4, "Gerona": 1, "Concepcion": 1 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "11,474", partialHa: "10,958.15", totalHa: "3,006.50", valuePhp: 438048577.0 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
       { commodity: "TOTAL", lgus: "18", farmers: "11,490", partialHa: "10,973.98", totalHa: "3,022.33", valuePhp: 439166277.0 }
     ],
     agriTotalPhp: 439166277.0,
     infraTotalPhp: 2582000000.0,
     dead: 8, injured: 1, missing: 1,
-    housesTotally: 35, housesPartially: 40,
+    housesTotally: 34, housesPartially: 19,
     assistCols: [13647289.0, 488613.43, 7912503.39, 610000.0, 4862853.0, 612964.0],
     assistTotalPhp: 28134222.82,
     assistByLgu: {}
@@ -978,13 +978,13 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 8, "Paniqui": 4, "Concepcion": 1 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "10,419", partialHa: "10,878.41", totalHa: "3,048.11", valuePhp: 439183290.52 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
       { commodity: "TOTAL", lgus: "18", farmers: "10,435", partialHa: "10,894.24", totalHa: "3,063.94", valuePhp: 440300990.52 }
     ],
     agriTotalPhp: 440300990.52,
     infraTotalPhp: 2582000000.0,
-    dead: 8, injured: 1, missing: 1,
-    housesTotally: 35, housesPartially: 40,
+    dead: 7, injured: 1, missing: 1,
+    housesTotally: 34, housesPartially: 19,
     assistCols: [13647289.0, 488613.43, 7912503.39, 610000.0, 4862853.0, 612964.0],
     assistTotalPhp: 28134222.82,
     assistByLgu: {}
@@ -1020,12 +1020,12 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 6, "Paniqui": 4 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "10,597", partialHa: "11,186.26", totalHa: "3,050.36", valuePhp: 459867384.35 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
       { commodity: "TOTAL", lgus: "18", farmers: "10,613", partialHa: "11,202.09", totalHa: "3,066.19", valuePhp: 460985084.35 }
     ],
     agriTotalPhp: 460985084.35,
     infraTotalPhp: 2582000000.0,
-    dead: 8, injured: 1, missing: 1,
+    dead: 7, injured: 1, missing: 1,
     housesTotally: 35, housesPartially: 40,
     assistCols: [13647289.0, 488613.43, 7912503.39, 610000.0, 4862853.0, 612964.0],
     assistTotalPhp: 28134222.82,
@@ -1062,8 +1062,8 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 3, "Paniqui": 4 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "10,621", partialHa: "11,222.86", totalHa: "3,050.36", valuePhp: 459335324.35 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
-      { commodity: "TOTAL", lgus: "18", farmers: "10,637", partialHa: "11,238.69", totalHa: "3,066.19", valuePhp: 460453024.35 }
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "TOTAL", lgus: "18", farmers: "10,637", partialHa: "11,222.86", totalHa: "3,066.19", valuePhp: 460453024.35 }
     ],
     agriTotalPhp: 460453024.35,
     infraTotalPhp: 2582000000.0,
@@ -1104,8 +1104,8 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Moncada": 3, "Paniqui": 4 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "10,621", partialHa: "11,222.86", totalHa: "3,050.36", valuePhp: 459335324.35 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
-      { commodity: "TOTAL", lgus: "18", farmers: "10,637", partialHa: "11,238.69", totalHa: "3,066.19", valuePhp: 460453024.35 }
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "TOTAL", lgus: "18", farmers: "10,637", partialHa: "11,222.86", totalHa: "3,066.19", valuePhp: 460453024.35 }
     ],
     agriTotalPhp: 460453024.35,
     infraTotalPhp: 2582000000.0,
@@ -1146,8 +1146,8 @@ export const RAW_ARCHIVE = {
     muniFloodCounts: { "Paniqui": 2 },
     agriRows: [
       { commodity: "RICE", lgus: "18", farmers: "10,621", partialHa: "11,222.86", totalHa: "3,050.36", valuePhp: 459335324.35 },
-      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "15.83", totalHa: "15.83", valuePhp: 1117700.0 },
-      { commodity: "TOTAL", lgus: "18", farmers: "10,637", partialHa: "11,238.69", totalHa: "3,066.19", valuePhp: 460453024.35 }
+      { commodity: "CORN", lgus: "2", farmers: "16", partialHa: "-", totalHa: "15.83", valuePhp: 1117700.0 },
+      { commodity: "TOTAL", lgus: "18", farmers: "10,637", partialHa: "11,222.86", totalHa: "3,066.19", valuePhp: 460453024.35 }
     ],
     agriTotalPhp: 460453024.35,
     infraTotalPhp: 2582000000.0,
