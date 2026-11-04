@@ -1196,46 +1196,6 @@ function renderOpcenScreen() {
   });
   document.getElementById("opcenStep3Content").append(summaryForm);
 
-  const summaryForm = document.createElement("form");
-  summaryForm.className = "md:col-span-2 p-4 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-3";
-  summaryForm.style.cssText = "background-color: var(--bg-subtle); border: 1px solid var(--border);";
-  summaryForm.innerHTML = '<div class="col-span-2 sm:col-span-4 font-bold">Edit report-wide counts and totals</div>';
-  const summaryFields = [
-    ["dead", "Dead", snap.dead, "1"],
-    ["injured", "Injured", snap.injured, "1"],
-    ["missing", "Missing", snap.missing, "1"],
-    ["housesTotally", "Houses totally damaged", snap.housesTotally, "1"],
-    ["housesPartially", "Houses partially damaged", snap.housesPartially, "1"],
-    ["infraTotalPhp", "Infrastructure damage (PHP)", snap.infraTotalPhp, "0.01"],
-    ["assistTotalPhp", "Humanitarian assistance (PHP)", snap.assistTotalPhp, "0.01"]
-  ];
-  summaryFields.forEach(([name, labelText, value, step]) => {
-    const label = document.createElement("label");
-    label.className = "text-xs font-semibold space-y-1";
-    label.textContent = labelText;
-    const input = document.createElement("input");
-    input.name = name;
-    input.type = "number";
-    input.min = "0";
-    input.step = step;
-    input.value = value || 0;
-    input.required = true;
-    input.className = "shadcn-control block w-full px-2 py-1.5 font-normal";
-    label.append(input);
-    summaryForm.append(label);
-  });
-  const summarySave = document.createElement("button");
-  summarySave.type = "submit";
-  summarySave.className = "shadcn-control px-3 py-1.5 text-xs font-bold col-span-2 sm:col-span-4 justify-self-start";
-  summarySave.textContent = "Save report summary";
-  summaryForm.append(summarySave);
-  summaryForm.addEventListener("submit", event => {
-    event.preventDefault();
-    store.updateReportSummary(Object.fromEntries(new FormData(summaryForm)));
-    showStatusToast("Updated report-wide counts and totals.");
-  });
-  document.getElementById("opcenStep3Content").append(summaryForm);
-
   const opcenFieldOps = getActiveFieldOversight(snap.updateNo);
   document.getElementById("opcenStep4Content").innerHTML = opcenFieldOps.deployments.map(d => `
     <div class="p-3 rounded-xl flex flex-wrap items-center justify-between gap-2" style="background-color: var(--bg-subtle); border: 1px solid var(--border);">
