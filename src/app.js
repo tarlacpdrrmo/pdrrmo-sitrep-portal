@@ -79,6 +79,7 @@ let specialOperationsMarkerById = new Map();
 let specialOperationsIncidentMarkerById = new Map();
 let specialOperationsMapRenderedKey = "";
 let specialOperationsVisibleMapPoints = [];
+let specialOperationsSelectedMarker = null;
 
 function fmtNum(n) {
   if (n === null || n === undefined || n === "-") return "-";
@@ -130,7 +131,7 @@ function ensureSpecialOperationsMap() {
   const container = document.getElementById("specialOperationsMap");
   if (!container || typeof window.L === "undefined") return false;
   if (!specialOperationsMap) {
-    specialOperationsMap = window.L.map(container, { scrollWheelZoom: false, zoomControl: false }).setView([15.48, 120.59], 9);
+    specialOperationsMap = window.L.map(container, { scrollWheelZoom: false, zoomControl: false, zoomSnap: 0.5, zoomDelta: 0.5 }).setView([15.48, 120.59], 9);
     window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'
@@ -197,14 +198,49 @@ function fitSpecialOperationsMap() {
   else specialOperationsMap.setView([15.48, 120.59], 9, { animate: true, duration: .35 });
 }
 
+function specialOperationPinIcon(color, incident = false, selected = false) {
+  const size = selected ? 38 : 32;
+  const height = selected ? 48 : 42;
+  const center = incident
+    ? `<circle cx="16" cy="14" r="6" fill="#fff"/><path d="M16 10v5" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="18" r="1.2" fill="${color}"/>`
+    : `<circle cx="16" cy="14" r="5" fill="#fff"/>`;
+  return window.L.divIcon({
+    className: selected ? "ops-map-pin-icon ops-map-pin-icon-selected" : "ops-map-pin-icon",
+    html: `<svg class="ops-map-pin-glyph" width="${size}" height="${height}" viewBox="0 0 32 42" role="img" aria-hidden="true"><path d="M16 1C7.8 1 1.5 7.3 1.5 15.2c0 10.1 14.5 25.2 14.5 25.2s14.5-15.1 14.5-25.2C30.5 7.3 24.2 1 16 1Z" fill="${color}" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/>${center}</svg>`,
+    iconSize: [size, height],
+    iconAnchor: [size / 2, height - 1],
+    popupAnchor: [0, -height + 5]
+  });
+}
+
 function focusSpecialOperationMarker(marker) {
   if (!marker || !specialOperationsMap) return;
-  const zoom = Math.max(12, Math.min(15, specialOperationsMap.getZoom()));
-  specialOperationsMap.setView(marker.getLatLng(), zoom, { animate: true, duration: .35 });
+  if (specialOperationsSelectedMarker && specialOperationsSelectedMarker !== marker) {
+    const previous = specialOperationsSelectedMarker;
+    previous.setIcon(specialOperationPinIcon(previous.options.operationColor, previous.options.operationIncident));
+    previous.setZIndexOffset(0);
+  }
+  specialOperationsSelectedMarker = marker;
+  marker.setIcon(specialOperationPinIcon(marker.options.operationColor, marker.options.operationIncident, true));
+  marker.setZIndexOffset(1000);
+
+  const focusAtStreetLevel = () => {
+    specialOperationsMap.stop();
+    const target = marker.options.operationLatLng || marker.getLatLng();
+    const zoom = Math.max(17, Math.min(18, specialOperationsMap.getZoom()));
+    const alreadyFocused = specialOperationsMap.getCenter().distanceTo(target) < 1
+      && Math.abs(specialOperationsMap.getZoom() - zoom) < .01;
+    if (alreadyFocused) {
+      marker.openPopup();
+      return;
+    }
+    specialOperationsMap.once("moveend", () => marker.openPopup());
+    specialOperationsMap.flyTo(target, zoom, { animate: true, duration: .7 });
+  };
   if (typeof specialOperationsLayer?.zoomToShowLayer === "function") {
-    specialOperationsLayer.zoomToShowLayer(marker, () => marker.openPopup());
+    specialOperationsLayer.zoomToShowLayer(marker, focusAtStreetLevel);
   } else {
-    marker.openPopup();
+    focusAtStreetLevel();
   }
 }
 
@@ -302,12 +338,20 @@ function renderSpecialOperationsMap(pins, incidents, allPinCount, allIncidentCou
   specialOperationsIncidentMarkerById = new Map();
   const points = [];
   const pinColors = { LGU: "#2C6586", NGO: "#2F7360", "Volunteer Groups": "#A85A12", "Other Agencies": "#52616B" };
+  specialOperationsSelectedMarker = null;
   pins.forEach(pin => {
     const lat = Number(pin.lat); const lng = Number(pin.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
     const color = pinColors[pin.category] || pinColors["Other Agencies"];
-    const marker = window.L.circleMarker([lat, lng], { radius: 6, color: "#fff", weight: 1.5, fillColor: color, fillOpacity: .95, className: "ops-marker" })
+    const marker = window.L.marker([lat, lng], {
+      icon: specialOperationPinIcon(color),
+      title: pin.location || "Deployment location",
+      riseOnHover: true
+    })
       .bindPopup(specialOperationPopupHtml(pin));
+    marker.options.operationColor = color;
+    marker.options.operationIncident = false;
+    marker.options.operationLatLng = window.L.latLng(lat, lng);
     marker.addTo(specialOperationsLayer);
     marker.on("click", () => showSpecialOperationPinDetail(pin.id));
     specialOperationsMarkerById.set(String(pin.id), marker);
@@ -317,9 +361,16 @@ function renderSpecialOperationsMap(pins, incidents, allPinCount, allIncidentCou
     if (incident.lat === null || incident.lat === undefined || String(incident.lat).trim() === ""
       || incident.lng === null || incident.lng === undefined || String(incident.lng).trim() === "") return;
     const lat = Number(incident.lat); const lng = Number(incident.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    const marker = window.L.circleMarker([lat, lng], { radius: 8, color: "#fff", weight: 1.5, fillColor: "#9A332C", fillOpacity: .96, className: "ops-marker" })
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+    const marker = window.L.marker([lat, lng], {
+      icon: specialOperationPinIcon("#9A332C", true),
+      title: incident.incidentType || "Reported incident",
+      riseOnHover: true
+    })
       .bindPopup(specialOperationPopupHtml(incident, true));
+    marker.options.operationColor = "#9A332C";
+    marker.options.operationIncident = true;
+    marker.options.operationLatLng = window.L.latLng(lat, lng);
     marker.addTo(specialOperationsLayer);
     marker.on("click", () => showSpecialOperationIncidentDetail(incident.id));
     specialOperationsIncidentMarkerById.set(String(incident.id), marker);

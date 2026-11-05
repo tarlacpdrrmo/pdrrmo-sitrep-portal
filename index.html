@@ -242,11 +242,10 @@
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .ops-marker {
-      border-radius: 9999px;
-      border: 2px solid #fff;
-      box-shadow: 0 1px 5px rgba(15, 23, 42, .35);
-    }
+    .ops-map-pin-icon { background: transparent; border: 0; }
+    .ops-map-pin-icon svg { display: block; overflow: visible; filter: drop-shadow(0 2px 3px rgba(15, 23, 42, .65)); transform-origin: 50% 88%; transition: transform 140ms ease, filter 140ms ease; }
+    .ops-map-pin-icon-selected { z-index: 1000 !important; }
+    .ops-map-pin-icon-selected svg { transform: scale(1.18); filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 7px #111827); }
     .ops-cluster-icon {
       display: grid;
       place-items: center;
