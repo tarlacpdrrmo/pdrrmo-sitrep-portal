@@ -128,9 +128,9 @@ service cloud.firestore {
           && request.resource.data.updatedAt.size() <= 40;
       }
 
-      allow get: if isPortalAdmin() || (isSpecialOperationsViewer() && resource.data.status == 'published');
+      allow get: if isPortalAdmin() || resource.data.status == 'published';
       allow list: if queryHasLimit(100)
-        && (isPortalAdmin() || (isSpecialOperationsViewer() && resource.data.status == 'published'));
+        && (isPortalAdmin() || resource.data.status == 'published');
       allow create, update: if isPortalAdmin() && validOperationMetadata();
       allow delete: if false;
 
@@ -187,7 +187,7 @@ service cloud.firestore {
             && request.resource.data.payload.incidents.size() <= 3000;
         }
 
-        allow get: if isPortalAdmin() || (isSpecialOperationsViewer() && isCurrentPublishedVersion());
+        allow get: if isPortalAdmin() || isCurrentPublishedVersion();
         allow list: if isPortalAdmin() && queryHasLimit(50);
         allow create: if isPortalAdmin() && validOperationVersion();
         allow update, delete: if false;

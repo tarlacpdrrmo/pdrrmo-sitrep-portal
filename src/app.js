@@ -2116,36 +2116,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   const specialOperationsScreen = document.getElementById("specialOperationsScreen");
   const opcenScreen = document.getElementById("opcenScreen");
   const secCue = document.getElementById("securityRoleCue");
-  let specialOperationsViewer = false;
+  let specialOperationsViewer = true;
   let availableSpecialOperations = [];
 
   async function refreshSpecialOperations(admin, viewer, preferredId = "") {
-    specialOperationsViewer = Boolean(viewer);
+    specialOperationsViewer = true;
     const gate = document.getElementById("specialOperationsGate");
     const adminUpload = document.getElementById("specialOperationsAdminUpload");
     const dashboard = document.getElementById("specialOperationsDashboard");
     const empty = document.getElementById("specialOperationsEmpty");
     const selectWrap = document.getElementById("specialOperationsSelectWrap");
     const accessBadge = document.getElementById("specialOperationsAccessBadge");
-    const gateText = document.getElementById("specialOperationsGateText");
-
-    adminUpload.classList.toggle("hidden", !admin);
-    gate.classList.toggle("hidden", Boolean(viewer));
+    adminUpload.classList.remove("hidden");
+    gate.classList.add("hidden");
+    const uploadFields = document.getElementById("specialOperationsUploadFields");
+    uploadFields.classList.toggle("hidden", !admin);
+    uploadFields.classList.toggle("grid", Boolean(admin));
+    document.getElementById("specialOperationsSignInBtn").classList.toggle("hidden", Boolean(admin));
     dashboard.classList.add("hidden");
     empty.classList.add("hidden");
     selectWrap.classList.add("hidden");
-    if (!viewer) {
-      accessBadge.className = "shadcn-badge badge-warning";
-      accessBadge.innerHTML = `<i class="ri-lock-2-line"></i><span>Approved access required</span>`;
-      gateText.textContent = auth.currentUser
-        ? "This signed-in account has not been approved to view special operations. Ask the portal administrator to authorize this Google account."
-        : "These operation records may include staff and incident contact details, so they are not available to public visitors.";
-      return;
-    }
-
     accessBadge.className = admin ? "shadcn-badge badge-success" : "shadcn-badge badge-neutral";
     accessBadge.innerHTML = admin
-      ? `<i class="ri-shield-check-line"></i><span>Administrator view</span>`
+      ? `<i class="ri-shield-check-line"></i><span>Administrator - publish enabled</span>`
       : `<i class="ri-eye-line"></i><span>Governor view · read only</span>`;
     try {
       availableSpecialOperations = await listSpecialOperations(Boolean(admin));
@@ -2184,6 +2177,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     navSpecialOpsBtn.classList.remove("is-active");
     navOpcenBtn.classList.remove("is-active");
     secCue.innerHTML = `<i class="ri-eye-line"></i><span>View only</span>`;
+    signInBtn.classList.toggle("hidden", Boolean(auth.currentUser));
   });
 
   navSpecialOpsBtn.addEventListener("click", async () => {
@@ -2196,8 +2190,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     navGovBtn.classList.remove("is-active");
     navSpecialOpsBtn.classList.add("is-active");
     navOpcenBtn.classList.remove("is-active");
-    secCue.innerHTML = `<i class="ri-eye-line"></i><span>${window.pdrrmoFirebaseAdmin ? "Admin · operation upload" : specialOperationsViewer ? "Approved view · read only" : "Access restricted"}</span>`;
-    await refreshSpecialOperations(Boolean(window.pdrrmoFirebaseAdmin), specialOperationsViewer);
+    secCue.innerHTML = `<i class="ri-eye-line"></i><span>${window.pdrrmoFirebaseAdmin ? "Admin operation upload" : "Public read only"}</span>`;
+    signInBtn.classList.add("hidden");
+    if (!auth.currentUser) authStatus.textContent = "Public view - sign in only to publish";
+    await refreshSpecialOperations(Boolean(window.pdrrmoFirebaseAdmin), true);
   });
 
   navOpcenBtn.addEventListener("click", () => {
@@ -2637,7 +2633,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   watchAuth(async user => {
-    signInBtn.classList.toggle("hidden", Boolean(user));
+    signInBtn.classList.toggle("hidden", Boolean(user) || !specialOperationsScreen.classList.contains("hidden"));
     signOutBtn.classList.toggle("hidden", !user);
     adminUidWrap.classList.toggle("hidden", !user);
     adminUid.textContent = user?.uid || "";
@@ -2680,9 +2676,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       opcenNav.classList.remove("is-active");
     }
-    specialOperationsViewer = operationViewer;
+    specialOperationsViewer = true;
     if (!specialOperationsScreen.classList.contains("hidden")) {
-      await refreshSpecialOperations(admin, operationViewer);
+      await refreshSpecialOperations(admin, true);
     }
     await refreshFirebaseEventOptions(admin);
     govFirebaseStatus.textContent = backupStatus.textContent;

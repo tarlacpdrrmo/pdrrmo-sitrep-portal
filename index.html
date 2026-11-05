@@ -671,24 +671,22 @@
       </div>
     </section>
 
-    <section id="specialOperationsGate" class="shadcn-card p-5 sm:p-8 text-center space-y-2">
-      <div class="mx-auto grid h-12 w-12 place-items-center rounded-full" style="background: var(--amber-bg); color: var(--amber);"><i class="ri-shield-keyhole-line text-xl"></i></div>
-      <h2 class="text-base font-bold">Sign in with an approved governor or administrator account</h2>
-      <p id="specialOperationsGateText" class="mx-auto max-w-xl text-xs sm:text-sm" style="color: var(--muted);">These operation records may include staff and incident contact details, so they are not available to public visitors.</p>
-      <button id="specialOperationsSignInBtn" type="button" class="shadcn-control mx-auto inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold">
-        <i class="ri-google-fill"></i><span>Sign in with Google</span>
-      </button>
-    </section>
+    <section id="specialOperationsGate" class="hidden"></section>
 
-    <section id="specialOperationsAdminUpload" class="hidden shadcn-card overflow-hidden">
+    <section id="specialOperationsAdminUpload" class="shadcn-card overflow-hidden">
       <div class="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 hairline-b" style="background: var(--bg-subtle);">
         <div class="flex items-start gap-2.5">
           <i class="ri-upload-cloud-2-line mt-0.5 text-lg" style="color: var(--channel);"></i>
           <div><h2 class="text-sm font-bold">Publish an Area Assignment export</h2><p class="text-[11px]" style="color: var(--muted);">Upload the full Deployment Database JSON exported from your desktop app.</p></div>
         </div>
-        <span class="text-[11px] font-semibold" style="color: var(--muted);"><i class="ri-history-line mr-1"></i>New uploads keep earlier versions</span>
+        <div class="flex items-center gap-3">
+          <span class="text-[11px] font-semibold" style="color: var(--muted);"><i class="ri-history-line mr-1"></i>New uploads keep earlier versions</span>
+          <button id="specialOperationsSignInBtn" type="button" class="shadcn-control inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold">
+            <i class="ri-google-fill"></i><span>Admin sign in to publish</span>
+          </button>
+        </div>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4">
+      <div id="specialOperationsUploadFields" class="hidden grid-cols-1 lg:grid-cols-12 gap-4 p-4">
         <div class="lg:col-span-5 space-y-3">
           <label class="block space-y-1.5">
             <span class="text-xs font-semibold">Operation name <span style="color: var(--brick);">*</span></span>
