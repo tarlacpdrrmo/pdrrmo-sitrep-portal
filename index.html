@@ -43,33 +43,6 @@
       --card-shadow: 0 1px 2px 0 rgba(18, 26, 32, 0.04);
     }
 
-    [data-theme="night"] {
-      --bg-canvas: #121A20;
-      --bg-card: #172129;
-      --bg-subtle: #1C2832;
-      --bg-muted: #22303C;
-      --ink: #DCE4E8;
-      --muted: #9DB0BB;
-      --border: #2A3842;
-      --border-strong: #3B4D5B;
-      --channel: #78AECB;
-      --deep: #1D4E6E;
-      --shallow: rgba(120, 174, 203, 0.15);
-      --amber: #E3A55F;
-      --amber-bg: rgba(227, 165, 95, 0.14);
-      --amber-ring: rgba(227, 165, 95, 0.35);
-      --green: #72B8A0;
-      --green-bg: rgba(114, 184, 160, 0.14);
-      --green-ring: rgba(114, 184, 160, 0.35);
-      --brick: #E58E85;
-      --brick-bg: rgba(229, 142, 133, 0.14);
-      --brick-ring: rgba(229, 142, 133, 0.35);
-      --blue-bg: rgba(120, 174, 203, 0.14);
-      --blue-ring: rgba(120, 174, 203, 0.35);
-      --bar-fill: rgba(120, 174, 203, 0.16);
-      --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35);
-    }
-
     body {
       background-color: var(--bg-canvas);
       color: var(--ink);
@@ -373,14 +346,6 @@
           <i class="ri-google-fill"></i><span>Staff sign in</span>
         </button>
         <button id="firebaseSignOutBtn" type="button" class="shadcn-control px-3 py-1 hidden">Sign out</button>
-        <button id="themeToggleBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5">
-          <i id="themeToggleIcon" class="ri-moon-clear-line"></i>
-          <span id="themeToggleText">Night theme</span>
-        </button>
-        <button id="testSessionCueBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5" style="color: var(--muted);">
-          <i class="ri-timer-line"></i>
-          <span>Session cue</span>
-        </button>
       </div>
       <div id="firebaseAdminUidWrap" class="hidden w-full text-xs" style="color: var(--muted);">
         Signed in account UID: <code id="firebaseAdminUid" class="select-all"></code>
@@ -388,13 +353,6 @@
       </div>
     </div>
   </header>
-
-  <!-- SESSION WARNING BANNER -->
-  <div id="sessionWarnBar" class="hidden px-4 py-2 text-xs sm:text-sm font-medium text-center hairline-b" style="background-color: var(--amber-bg); color: var(--amber);">
-    <i class="ri-time-line mr-1"></i>
-    Your session ends in 2 minutes. Your draft is saved.
-    <button id="dismissSessionBtn" type="button" class="ml-3 underline font-bold">Continue session</button>
-  </div>
 
   <!-- QUIET NEW SITREP PUBLISHED NOTICE -->
   <div id="newSitrepNoticeBar" class="hidden px-4 py-2 text-xs sm:text-sm font-medium text-center hairline-b" style="background-color: var(--shallow); color: var(--ink);">
@@ -663,7 +621,7 @@
         <p class="max-w-3xl text-xs sm:text-sm" style="color: var(--muted);">Read-only view of published operation plans from the Area Assignment desktop app.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <span id="specialOperationsAccessBadge" class="shadcn-badge badge-neutral"><i class="ri-lock-2-line"></i><span>Approved access required</span></span>
+        <span id="specialOperationsAccessBadge" class="shadcn-badge badge-neutral"><i class="ri-eye-line"></i><span>Public view - read only</span></span>
         <label id="specialOperationsSelectWrap" class="hidden flex items-center gap-2 text-xs font-semibold">
           <span>Operation</span>
           <select id="specialOperationsSelect" class="shadcn-control max-w-[min(70vw,360px)] px-2.5 py-1.5 text-xs"></select>
@@ -720,7 +678,7 @@
     <section id="specialOperationsEmpty" class="hidden shadcn-card p-6 sm:p-10 text-center space-y-2">
       <div class="mx-auto grid h-12 w-12 place-items-center rounded-full" style="background: var(--blue-bg); color: var(--channel);"><i class="ri-map-2-line text-xl"></i></div>
       <h2 class="text-base font-bold">No published special operations yet</h2>
-      <p class="mx-auto max-w-xl text-xs sm:text-sm" style="color: var(--muted);">An administrator can publish the first operation from the JSON export above. It will appear here for approved viewers.</p>
+      <p class="mx-auto max-w-xl text-xs sm:text-sm" style="color: var(--muted);">An administrator can publish the first operation from the JSON export above. Published operations are viewable without signing in.</p>
     </section>
 
     <div id="specialOperationsDashboard" class="hidden space-y-4 operations-enter">

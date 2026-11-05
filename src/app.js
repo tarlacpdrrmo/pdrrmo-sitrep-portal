@@ -31,13 +31,11 @@ const verticalCrosshairPlugin = {
     const x = activeEl.element.x;
     const topY = chart.scales.y.top;
     const bottomY = chart.scales.y.bottom;
-    const isNight = document.documentElement.getAttribute("data-theme") === "night";
-
     ctx.save();
 
     // 1. Soft vertical highlight band behind the hovered column
     const bandWidth = chart.config.type === "bar" ? 18 : 24;
-    ctx.fillStyle = isNight ? "rgba(120, 174, 203, 0.09)" : "rgba(44, 101, 134, 0.07)";
+    ctx.fillStyle = "rgba(44, 101, 134, 0.07)";
     ctx.fillRect(x - bandWidth / 2, topY, bandWidth, bottomY - topY);
 
     // 2. Crisp dashed vertical guide line from top of chart to X-axis
@@ -46,14 +44,14 @@ const verticalCrosshairPlugin = {
     ctx.moveTo(x, topY);
     ctx.lineTo(x, bottomY);
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = isNight ? "#78AECB" : "#2C6586";
+    ctx.strokeStyle = "#2C6586";
     ctx.stroke();
 
     // 3. Small anchor dot right on the X-axis baseline
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.arc(x, bottomY, 3, 0, Math.PI * 2);
-    ctx.fillStyle = isNight ? "#78AECB" : "#2C6586";
+    ctx.fillStyle = "#2C6586";
     ctx.fill();
 
     ctx.restore();
@@ -2087,26 +2085,12 @@ function closeDetailPanel() {
 document.addEventListener("DOMContentLoaded", async () => {
   await initPdfWorker();
 
-  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    document.documentElement.setAttribute("data-theme", "night");
-    document.getElementById("themeToggleText").textContent = "Daylight theme";
-    document.getElementById("themeToggleIcon").className = "ri-sun-line";
-  }
-
   populateSitrepSelects();
 
   store.subscribe(() => {
     populateSitrepSelects();
     renderGovernorScreen();
     renderOpcenScreen();
-  });
-
-  document.getElementById("themeToggleBtn").addEventListener("click", () => {
-    const root = document.documentElement;
-    const next = root.getAttribute("data-theme") === "night" ? "daylight" : "night";
-    root.setAttribute("data-theme", next);
-    document.getElementById("themeToggleText").textContent = next === "night" ? "Daylight theme" : "Night theme";
-    document.getElementById("themeToggleIcon").className = next === "night" ? "ri-sun-line" : "ri-moon-clear-line";
   });
 
   const navGovBtn = document.getElementById("navGovBtn");
@@ -2139,7 +2123,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     accessBadge.className = admin ? "shadcn-badge badge-success" : "shadcn-badge badge-neutral";
     accessBadge.innerHTML = admin
       ? `<i class="ri-shield-check-line"></i><span>Administrator - publish enabled</span>`
-      : `<i class="ri-eye-line"></i><span>Governor view · read only</span>`;
+      : `<i class="ri-eye-line"></i><span>Public view - read only</span>`;
     try {
       availableSpecialOperations = await listSpecialOperations(Boolean(admin));
       const select = document.getElementById("specialOperationsSelect");
@@ -2433,13 +2417,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     navGovBtn.click();
   });
 
-  document.getElementById("testSessionCueBtn").addEventListener("click", () => {
-    document.getElementById("sessionWarnBar").classList.remove("hidden");
-  });
-  document.getElementById("dismissSessionBtn").addEventListener("click", () => {
-    document.getElementById("sessionWarnBar").classList.add("hidden");
-  });
-
   document.getElementById("closeDetailBtn").addEventListener("click", closeDetailPanel);
   document.getElementById("detailBackdrop").addEventListener("click", (e) => {
     if (e.target.id === "detailBackdrop") closeDetailPanel();
@@ -2559,7 +2536,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const uploadNotes = [];
       if (payload.incidents.some(record => record.reporterName || record.reporterContact)
         || payload.pins.some(record => record.focalPerson || record.contactNumber)) {
-        uploadNotes.push("This file contains staff or reporter contact details. Only approved viewers and portal administrators can access the published records.");
+        uploadNotes.push("This file contains staff or reporter contact details. Anyone who opens the public operation view can see these details after publication.");
       }
       if (!Array.isArray(payload.standaloneAssets)) {
         uploadNotes.push("This desktop app export does not include separately dropped tactical assets. Pins and incident records in this file are included.");
@@ -2588,7 +2565,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const existing = availableSpecialOperations.find(operation => operation.id === operationId);
     const action = existing
       ? `This will publish a new version of “${name}”. The previous version will remain in the archive, and this version will become the one viewers see.`
-      : `Publish “${name}” for approved viewers? The uploaded map and records will be read-only in the viewer.`;
+      : `Publish “${name}” publicly? Anyone can view the uploaded map and records without signing in.`;
     if (!window.confirm(`${action}\n\n${specialOperationsPending.payload.pins.length} deployments · ${specialOperationsPending.payload.agencies.length} agencies · ${specialOperationsPending.payload.incidents.length} incidents`)) return;
 
     button.disabled = true;
@@ -2601,7 +2578,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         sourceFileName: specialOperationsPending.file.name,
         payload: specialOperationsPending.payload
       });
-      setSpecialOperationsStatus(`Published ${name} · version ${result.versionCount}. Approved viewers can now open it.`, "success");
+      setSpecialOperationsStatus(`Published ${name} · version ${result.versionCount}. The operation is now publicly viewable.`, "success");
       specialOperationsPending = null;
       document.getElementById("specialOperationJsonInput").value = "";
       document.getElementById("specialOperationFileLabel").textContent = "Choose JSON from this computer";
@@ -2609,7 +2586,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.getElementById("specialOperationName").value = "";
       document.getElementById("specialOperationPeriod").value = "";
       await refreshSpecialOperations(true, true, result.operationId);
-      showStatusToast(`Published ${name} for governor view.`);
+      showStatusToast(`Published ${name} for public viewing.`);
     } catch (error) {
       setSpecialOperationsStatus(`Could not publish this upload: ${error.message}`, "error");
     } finally {
