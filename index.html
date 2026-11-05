@@ -9,6 +9,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -203,6 +206,47 @@
       opacity: 0.45;
     }
 
+    #specialOperationsMap {
+      min-height: 360px;
+      height: clamp(360px, 48vw, 560px);
+      background: var(--bg-muted);
+      z-index: 0;
+    }
+    .operations-enter {
+      animation: operationsEnter 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    }
+    @keyframes operationsEnter {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .ops-marker {
+      border-radius: 9999px;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 5px rgba(15, 23, 42, .35);
+    }
+    .ops-cluster-icon {
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--bg-card);
+      border-radius: 9999px;
+      background: var(--deep);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .28);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .ops-popup { min-width: 190px; color: #1f2a33; }
+    .ops-popup-title { font-weight: 700; margin-bottom: 4px; }
+    .ops-popup-line { font-size: 12px; margin-top: 3px; }
+    .ops-table-row { transition: background-color 140ms ease, box-shadow 140ms ease; }
+    .ops-table-row.is-selected { background-color: var(--shallow); box-shadow: inset 3px 0 var(--channel); }
+    @media (prefers-reduced-motion: reduce) {
+      .operations-enter, .ops-table-row { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+    @media print {
+      #specialOperationsScreen { display: none !important; }
+    }
+
     @keyframes rowTintFade {
       0% { background-color: var(--shallow); }
       100% { background-color: transparent; }
@@ -291,6 +335,10 @@
           <i class="ri-dashboard-horizontal-line"></i>
           <span>Governor view</span>
         </button>
+        <button id="navSpecialOpsBtn" type="button" class="shadcn-tab-btn">
+          <i class="ri-map-pin-2-line"></i>
+          <span>Special Event Operations</span>
+        </button>
         <button id="navOpcenBtn" type="button" class="shadcn-tab-btn hidden">
           <i class="ri-edit-box-line"></i>
           <span>Operations Center entry</span>
@@ -300,7 +348,7 @@
       <div class="flex items-center gap-2">
         <span id="firebaseAuthStatus" class="text-xs hidden sm:inline" style="color: var(--muted);">Firebase not connected</span>
         <button id="firebaseSignInBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5">
-          <i class="ri-google-fill"></i><span>Admin sign in</span>
+          <i class="ri-google-fill"></i><span>Staff sign in</span>
         </button>
         <button id="firebaseSignOutBtn" type="button" class="shadcn-control px-3 py-1 hidden">Sign out</button>
         <button id="themeToggleBtn" type="button" class="shadcn-control px-3 py-1 inline-flex items-center gap-1.5">
@@ -314,7 +362,7 @@
       </div>
       <div id="firebaseAdminUidWrap" class="hidden w-full text-xs" style="color: var(--muted);">
         Signed in account UID: <code id="firebaseAdminUid" class="select-all"></code>
-        <span>Ask the Firebase project owner to add this UID at <code>admins/{uid}</code> with <code>enabled: true</code>.</span>
+        <span id="firebaseRoleUidHint">Ask the Firebase project owner to add this UID with the appropriate portal access role.</span>
       </div>
     </div>
   </header>
@@ -580,6 +628,134 @@
       </div>
     </footer>
 
+  </main>
+
+  <!-- SPECIAL EVENT OPERATIONS: SECURE, READ-ONLY GOVERNOR VIEW -->
+  <main id="specialOperationsScreen" class="hidden flex-1 w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4 crossfade-region">
+    <section class="shadcn-card px-4 py-4 sm:px-5 sm:py-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div class="min-w-0 space-y-1">
+        <div class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.12em]" style="color: var(--channel);">
+          <i class="ri-map-pin-2-line text-sm"></i><span>Special event operations</span>
+        </div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight">Deployment areas and incident overview</h1>
+        <p class="max-w-3xl text-xs sm:text-sm" style="color: var(--muted);">Read-only view of published operation plans from the Area Assignment desktop app.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span id="specialOperationsAccessBadge" class="shadcn-badge badge-neutral"><i class="ri-lock-2-line"></i><span>Approved access required</span></span>
+        <label id="specialOperationsSelectWrap" class="hidden flex items-center gap-2 text-xs font-semibold">
+          <span>Operation</span>
+          <select id="specialOperationsSelect" class="shadcn-control max-w-[min(70vw,360px)] px-2.5 py-1.5 text-xs"></select>
+        </label>
+      </div>
+    </section>
+
+    <section id="specialOperationsGate" class="shadcn-card p-5 sm:p-8 text-center space-y-2">
+      <div class="mx-auto grid h-12 w-12 place-items-center rounded-full" style="background: var(--amber-bg); color: var(--amber);"><i class="ri-shield-keyhole-line text-xl"></i></div>
+      <h2 class="text-base font-bold">Sign in with an approved governor or administrator account</h2>
+      <p id="specialOperationsGateText" class="mx-auto max-w-xl text-xs sm:text-sm" style="color: var(--muted);">These operation records may include staff and incident contact details, so they are not available to public visitors.</p>
+      <button id="specialOperationsSignInBtn" type="button" class="shadcn-control mx-auto inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold">
+        <i class="ri-google-fill"></i><span>Sign in with Google</span>
+      </button>
+    </section>
+
+    <section id="specialOperationsAdminUpload" class="hidden shadcn-card overflow-hidden">
+      <div class="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 hairline-b" style="background: var(--bg-subtle);">
+        <div class="flex items-start gap-2.5">
+          <i class="ri-upload-cloud-2-line mt-0.5 text-lg" style="color: var(--channel);"></i>
+          <div><h2 class="text-sm font-bold">Publish an Area Assignment export</h2><p class="text-[11px]" style="color: var(--muted);">Upload the full Deployment Database JSON exported from your desktop app.</p></div>
+        </div>
+        <span class="text-[11px] font-semibold" style="color: var(--muted);"><i class="ri-history-line mr-1"></i>New uploads keep earlier versions</span>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4">
+        <div class="lg:col-span-5 space-y-3">
+          <label class="block space-y-1.5">
+            <span class="text-xs font-semibold">Operation name <span style="color: var(--brick);">*</span></span>
+            <input id="specialOperationName" type="text" maxlength="120" placeholder="e.g. Undas 2026" class="shadcn-control w-full px-3 py-2 text-sm" autocomplete="off" />
+          </label>
+          <label class="block space-y-1.5">
+            <span class="text-xs font-semibold">Coverage dates <span class="font-normal" style="color: var(--muted);">(optional)</span></span>
+            <input id="specialOperationPeriod" type="text" maxlength="120" placeholder="e.g. Oct 30–Nov 2, 2026" class="shadcn-control w-full px-3 py-2 text-sm" autocomplete="off" />
+          </label>
+          <label for="specialOperationJsonInput" class="shadcn-control w-full cursor-pointer inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold">
+            <i class="ri-file-upload-line"></i><span id="specialOperationFileLabel">Choose JSON from this computer</span>
+            <input id="specialOperationJsonInput" type="file" accept="application/json,.json" class="sr-only" />
+          </label>
+          <p class="text-[11px]" style="color: var(--muted);">Incident-only reports are not accepted here. Upload the full export so the map, assignments, agencies, and incidents stay together.</p>
+        </div>
+        <div id="specialOperationPreview" class="hidden lg:col-span-7 rounded-xl p-3.5 sm:p-4 space-y-3" style="background: var(--bg-subtle); border: 1px solid var(--border);">
+          <div class="flex items-center justify-between gap-2">
+            <div><h3 class="text-xs font-bold">Upload preview</h3><p id="specialOperationPreviewFile" class="text-[11px] truncate max-w-[70vw]" style="color: var(--muted);"></p></div>
+            <span id="specialOperationPreviewState" class="shadcn-badge badge-neutral"></span>
+          </div>
+          <div id="specialOperationPreviewCounts" class="grid grid-cols-3 gap-2"></div>
+          <div id="specialOperationUploadNotice" class="hidden rounded-lg px-3 py-2 text-xs" role="status"></div>
+          <button id="specialOperationPublishBtn" type="button" disabled class="w-full sm:w-auto shadcn-control inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+            <i class="ri-cloud-line"></i><span>Publish this version</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div id="specialOperationsStatus" class="hidden rounded-lg px-3.5 py-2.5 text-xs sm:text-sm" role="status"></div>
+    <section id="specialOperationsEmpty" class="hidden shadcn-card p-6 sm:p-10 text-center space-y-2">
+      <div class="mx-auto grid h-12 w-12 place-items-center rounded-full" style="background: var(--blue-bg); color: var(--channel);"><i class="ri-map-2-line text-xl"></i></div>
+      <h2 class="text-base font-bold">No published special operations yet</h2>
+      <p class="mx-auto max-w-xl text-xs sm:text-sm" style="color: var(--muted);">An administrator can publish the first operation from the JSON export above. It will appear here for approved viewers.</p>
+    </section>
+
+    <div id="specialOperationsDashboard" class="hidden space-y-4 operations-enter">
+      <section class="grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Operation summary">
+        <article class="shadcn-card p-3.5 sm:p-4"><div class="flex items-center justify-between gap-2"><span class="text-[11px] font-semibold" style="color: var(--muted);">Deployment locations</span><i class="ri-map-pin-2-line" style="color: var(--channel);"></i></div><div id="specialOpsPinCount" class="mt-1 text-2xl font-bold">—</div><div class="text-[10px]" style="color: var(--muted);">Pins from the uploaded plan</div></article>
+        <article class="shadcn-card p-3.5 sm:p-4"><div class="flex items-center justify-between gap-2"><span class="text-[11px] font-semibold" style="color: var(--muted);">Listed agencies</span><i class="ri-building-2-line" style="color: var(--channel);"></i></div><div id="specialOpsAgencyCount" class="mt-1 text-2xl font-bold">—</div><div class="text-[10px]" style="color: var(--muted);">From the desktop app export</div></article>
+        <article class="shadcn-card p-3.5 sm:p-4"><div class="flex items-center justify-between gap-2"><span class="text-[11px] font-semibold" style="color: var(--muted);">Reported incidents</span><i class="ri-alarm-warning-line" style="color: var(--amber);"></i></div><div id="specialOpsIncidentCount" class="mt-1 text-2xl font-bold">—</div><div class="text-[10px]" style="color: var(--muted);">Records included in this version</div></article>
+        <article class="shadcn-card p-3.5 sm:p-4"><div class="flex items-center justify-between gap-2"><span class="text-[11px] font-semibold" style="color: var(--muted);">Assigned personnel</span><i class="ri-group-line" style="color: var(--green);"></i></div><div id="specialOpsPaxCount" class="mt-1 text-2xl font-bold">—</div><div class="text-[10px]" style="color: var(--muted);">Sum of reported deployment PAX</div></article>
+      </section>
+
+      <section class="shadcn-card p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h2 id="specialOpsHeading" class="text-base sm:text-lg font-bold truncate"></h2><span class="shadcn-badge badge-success"><i class="ri-check-line"></i><span>Published</span></span></div><p id="specialOpsMeta" class="mt-1 text-[11px] sm:text-xs" style="color: var(--muted);"></p></div>
+        <label class="flex items-center gap-2 text-xs font-semibold shrink-0"><i class="ri-search-line" style="color: var(--muted);"></i><span class="sr-only">Search operation details</span><input id="specialOpsSearch" type="search" placeholder="Find area, agency, or incident" class="shadcn-control w-full md:w-72 px-3 py-2 text-xs" /></label>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        <article class="xl:col-span-7 shadcn-card overflow-hidden">
+          <div class="px-4 py-3 hairline-b flex flex-wrap items-center justify-between gap-2" style="background: var(--bg-subtle);">
+            <div><h2 class="text-sm font-bold">Deployment and incident map</h2><p class="text-[11px]" style="color: var(--muted);">Select a marker to inspect the uploaded record. Map controls are view-only.</p></div>
+            <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
+              <span class="shadcn-badge badge-water">● Deployment</span><span class="shadcn-badge badge-warning">● Incident</span>
+            </div>
+          </div>
+          <div id="specialOperationsMap" role="region" aria-label="Map of deployment pins and reported incidents"></div>
+          <div class="px-3 py-2 hairline-t flex flex-wrap items-center justify-between gap-1 text-[10px]" style="color: var(--muted);"><span id="specialOpsMapCount">Map locations load with the operation.</span><span>Map data © OpenStreetMap contributors</span></div>
+        </article>
+
+        <article class="xl:col-span-5 shadcn-card overflow-hidden">
+          <div class="px-4 py-3 hairline-b" style="background: var(--bg-subtle);"><h2 class="text-sm font-bold">Deployment assignments</h2><p id="specialOpsPinTableSubhead" class="text-[11px]" style="color: var(--muted);"></p></div>
+          <div class="max-h-[560px] overflow-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="sticky top-0 hairline-b font-semibold" style="color: var(--muted); background: var(--bg-subtle);"><tr><th class="py-2 px-3">Area / location</th><th class="py-2 px-2">Agency</th><th class="py-2 px-2 text-right">PAX</th></tr></thead>
+              <tbody id="specialOpsPinsTable"></tbody>
+            </table>
+          </div>
+          <div id="specialOpsPinDetail" class="hidden p-3.5 hairline-t text-xs space-y-2" style="background: var(--bg-subtle);"></div>
+        </article>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        <article class="xl:col-span-8 shadcn-card overflow-hidden">
+          <div class="px-4 py-3 hairline-b flex items-center justify-between gap-2" style="background: var(--bg-subtle);"><div><h2 class="text-sm font-bold">Incident log</h2><p class="text-[11px]" style="color: var(--muted);">Read-only records from the uploaded operation file.</p></div><span id="specialOpsIncidentTableCount" class="shadcn-badge badge-neutral"></span></div>
+          <div class="overflow-x-auto"><table class="w-full min-w-[720px] text-left border-collapse text-xs"><thead class="hairline-b font-semibold" style="color: var(--muted); background: var(--bg-subtle);"><tr><th class="py-2 px-3">Date / incident</th><th class="py-2 px-2">Area</th><th class="py-2 px-2">Action / response</th><th class="py-2 px-2">Status</th></tr></thead><tbody id="specialOpsIncidentsTable"></tbody></table></div>
+          <div id="specialOpsIncidentDetail" class="hidden p-3.5 hairline-t text-xs space-y-2" style="background: var(--bg-subtle);"></div>
+        </article>
+        <article class="xl:col-span-4 shadcn-card overflow-hidden">
+          <div class="px-4 py-3 hairline-b" style="background: var(--bg-subtle);"><h2 class="text-sm font-bold">Agency directory</h2><p class="text-[11px]" style="color: var(--muted);">Agencies included in this operation plan.</p></div>
+          <div id="specialOpsAgencyList" class="max-h-[410px] overflow-auto divide-y" style="border-color: var(--border);"></div>
+        </article>
+      </section>
+      <section class="hidden shadcn-card p-4 space-y-1.5">
+        <h2 class="text-xs font-bold">Operation notes</h2>
+        <p id="specialOpsNotes" class="text-xs whitespace-pre-wrap" style="color: var(--muted);"></p>
+      </section>
+    </div>
   </main>
 
   <!-- ===================================================================== -->
@@ -1011,6 +1187,8 @@
     <span id="statusToastMsg">Saved</span>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>

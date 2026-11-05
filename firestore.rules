@@ -7,6 +7,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true;
     }
 
+    function isSpecialOperationsViewer() {
+      return isPortalAdmin()
+        || (request.auth != null
+          && exists(/databases/$(database)/documents/operationViewers/$(request.auth.uid))
+          && get(/databases/$(database)/documents/operationViewers/$(request.auth.uid)).data.enabled == true);
+    }
+
     function queryHasLimit(maximum) {
       return request.query.limit != null && request.query.limit <= maximum;
     }
@@ -79,6 +86,111 @@ service cloud.firestore {
           && request.resource.data.updatedAt is string
           && request.resource.data.updatedAt.size() <= 40;
         allow delete: if isPortalAdmin();
+      }
+    }
+
+    match /operationViewers/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /specialOperations/{operationId} {
+      function validOperationMetadata() {
+        return request.resource.data.keys().hasAll([
+            'name', 'period', 'status', 'currentVersionId', 'versionCount',
+            'agencyCount', 'pinCount', 'incidentCount', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'name', 'period', 'status', 'currentVersionId', 'versionCount',
+            'agencyCount', 'pinCount', 'incidentCount', 'updatedAt'
+          ])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 120
+          && request.resource.data.period is string
+          && request.resource.data.period.size() <= 120
+          && request.resource.data.status == 'published'
+          && request.resource.data.currentVersionId is string
+          && request.resource.data.currentVersionId.size() <= 80
+          && request.resource.data.versionCount is int
+          && request.resource.data.versionCount > 0
+          && request.resource.data.versionCount <= 10000
+          && request.resource.data.agencyCount is int
+          && request.resource.data.agencyCount >= 0
+          && request.resource.data.agencyCount <= 500
+          && request.resource.data.pinCount is int
+          && request.resource.data.pinCount > 0
+          && request.resource.data.pinCount <= 1500
+          && request.resource.data.incidentCount is int
+          && request.resource.data.incidentCount >= 0
+          && request.resource.data.incidentCount <= 3000
+          && request.resource.data.updatedAt is string
+          && request.resource.data.updatedAt.size() <= 40;
+      }
+
+      allow get: if isPortalAdmin() || (isSpecialOperationsViewer() && resource.data.status == 'published');
+      allow list: if queryHasLimit(100)
+        && (isPortalAdmin() || (isSpecialOperationsViewer() && resource.data.status == 'published'));
+      allow create, update: if isPortalAdmin() && validOperationMetadata();
+      allow delete: if false;
+
+      match /versions/{versionId} {
+        function isCurrentPublishedVersion() {
+          return exists(/databases/$(database)/documents/specialOperations/$(operationId))
+            && get(/databases/$(database)/documents/specialOperations/$(operationId)).data.status == 'published'
+            && get(/databases/$(database)/documents/specialOperations/$(operationId)).data.currentVersionId == versionId;
+        }
+
+        function validOperationVersion() {
+          return request.resource.data.keys().hasAll([
+              'name', 'period', 'sourceFileName', 'exportedAt', 'uploadedAt', 'uploadedBy',
+              'agencyCount', 'pinCount', 'incidentCount', 'payload'
+            ])
+            && request.resource.data.keys().hasOnly([
+              'name', 'period', 'sourceFileName', 'exportedAt', 'uploadedAt', 'uploadedBy',
+              'agencyCount', 'pinCount', 'incidentCount', 'payload'
+            ])
+            && request.resource.data.name is string
+            && request.resource.data.name.size() > 0
+            && request.resource.data.name.size() <= 120
+            && request.resource.data.period is string
+            && request.resource.data.period.size() <= 120
+            && request.resource.data.sourceFileName is string
+            && request.resource.data.sourceFileName.size() <= 180
+            && request.resource.data.exportedAt is string
+            && request.resource.data.exportedAt.size() <= 60
+            && request.resource.data.uploadedAt is string
+            && request.resource.data.uploadedAt.size() <= 40
+            && request.resource.data.uploadedBy is string
+            && request.resource.data.uploadedBy.size() <= 200
+            && request.resource.data.agencyCount is int
+            && request.resource.data.agencyCount >= 0
+            && request.resource.data.agencyCount <= 500
+            && request.resource.data.pinCount is int
+            && request.resource.data.pinCount > 0
+            && request.resource.data.pinCount <= 1500
+            && request.resource.data.incidentCount is int
+            && request.resource.data.incidentCount >= 0
+            && request.resource.data.incidentCount <= 3000
+            && request.resource.data.payload is map
+            && request.resource.data.payload.keys().hasAll(['agencies', 'pins', 'incidents'])
+            && request.resource.data.payload.keys().hasOnly([
+              'app', 'exportedAt', 'operationTitle', 'preparedBy', 'meetingNotes',
+              'agencies', 'pins', 'incidents', 'standaloneAssets'
+            ])
+            && request.resource.data.payload.agencies is list
+            && request.resource.data.payload.agencies.size() <= 500
+            && request.resource.data.payload.pins is list
+            && request.resource.data.payload.pins.size() > 0
+            && request.resource.data.payload.pins.size() <= 1500
+            && request.resource.data.payload.incidents is list
+            && request.resource.data.payload.incidents.size() <= 3000;
+        }
+
+        allow get: if isPortalAdmin() || (isSpecialOperationsViewer() && isCurrentPublishedVersion());
+        allow list: if isPortalAdmin() && queryHasLimit(50);
+        allow create: if isPortalAdmin() && validOperationVersion();
+        allow update, delete: if false;
       }
     }
 

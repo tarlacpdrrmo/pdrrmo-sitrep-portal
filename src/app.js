@@ -4,10 +4,18 @@ import { store } from "./services/store.js";
 import { initPdfWorker, scanSitrepPdfFile } from "./services/pdfScanner.js";
 import { ARG_STATION_META, ARG_DAILY_SERIES, getArgStatsForSitrep, getArg38DayTimeline, parseArgCsvFile } from "./services/argService.js";
 import {
-  BACKUP_SCHEMA_VERSION, downloadBackup, importBackupToFirebase,
+  BACKUP_SCHEMA_VERSION, auth, downloadBackup, importBackupToFirebase,
   isPortalAdmin, listPortalEvents, loadPortalEvent,
   signInAdmin, signOutUser, validateBackup, watchAuth
 } from "./services/firebaseService.js";
+import {
+  isSpecialOperationsViewer,
+  listSpecialOperations,
+  loadSpecialOperation,
+  operationIdFromName,
+  publishSpecialOperation,
+  validateDeploymentExport
+} from "./services/operationsService.js";
 
 const TARLAC_POP_2024 = BASE_LGUS.reduce((s, m) => s + (m.pop2024 || 0), 0);
 
@@ -63,6 +71,13 @@ let inlineEditEpId = null;
 let isOfflineSimulated = false;
 let isEmptyFloodPreview = false;
 let activeGovTab = "split";
+let specialOperationsMap = null;
+let specialOperationsLayer = null;
+let specialOperationsCurrent = null;
+let specialOperationsPending = null;
+let specialOperationsMarkerById = new Map();
+let specialOperationsIncidentMarkerById = new Map();
+let specialOperationsMapRenderedKey = "";
 
 function fmtNum(n) {
   if (n === null || n === undefined || n === "-") return "-";
@@ -93,6 +108,227 @@ function showStatusToast(text) {
   el.classList.remove("hidden");
   clearTimeout(window._toastTimer);
   window._toastTimer = setTimeout(() => el.classList.add("hidden"), 2600);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[char]);
+}
+
+function setSpecialOperationsStatus(message, tone = "info") {
+  const status = document.getElementById("specialOperationsStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.remove("hidden");
+  status.style.backgroundColor = tone === "error" ? "var(--brick-bg)" : tone === "success" ? "var(--green-bg)" : "var(--blue-bg)";
+  status.style.color = tone === "error" ? "var(--brick)" : tone === "success" ? "var(--green)" : "var(--channel)";
+}
+
+function ensureSpecialOperationsMap() {
+  const container = document.getElementById("specialOperationsMap");
+  if (!container || typeof window.L === "undefined") return false;
+  if (!specialOperationsMap) {
+    specialOperationsMap = window.L.map(container, { scrollWheelZoom: false, zoomControl: true }).setView([15.48, 120.59], 9);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'
+    }).addTo(specialOperationsMap);
+    specialOperationsLayer = typeof window.L.markerClusterGroup === "function"
+      ? window.L.markerClusterGroup({
+          maxClusterRadius: 46,
+          showCoverageOnHover: false,
+          spiderfyOnMaxZoom: true,
+          iconCreateFunction: cluster => window.L.divIcon({
+            className: "ops-cluster-icon",
+            html: `<span>${cluster.getChildCount()}</span>`,
+            iconSize: window.L.point(38, 38)
+          })
+        }).addTo(specialOperationsMap)
+      : window.L.featureGroup().addTo(specialOperationsMap);
+  }
+  window.setTimeout(() => specialOperationsMap?.invalidateSize(), 80);
+  return true;
+}
+
+function formatOperationDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function valuePairsHtml(record, fields) {
+  return fields.filter(([label, value]) => value !== undefined && value !== null && String(value).trim() !== "")
+    .map(([label, value]) => `<div class="grid grid-cols-[112px_1fr] gap-2"><span style="color:var(--muted)">${escapeHtml(label)}</span><span class="font-medium break-words">${escapeHtml(value)}</span></div>`)
+    .join("");
+}
+
+function specialOperationPopupHtml(record, incident = false) {
+  const title = incident ? (record.incidentType || "Reported incident") : (record.location || "Deployment location");
+  const secondary = incident
+    ? [record.municipality, record.date, record.time].filter(Boolean).join(" · ")
+    : [record.municipality, record.agency].filter(Boolean).join(" · ");
+  return `<div class="ops-popup"><div class="ops-popup-title">${escapeHtml(title)}</div><div class="ops-popup-line">${escapeHtml(secondary)}</div>${incident
+    ? `<div class="ops-popup-line">${escapeHtml(record.status || "Incident record")}</div>`
+    : `<div class="ops-popup-line">${escapeHtml(record.task || record.category || "Deployment pin")}</div>`}</div>`;
+}
+
+function renderSpecialOperationsDashboard(operation) {
+  specialOperationsCurrent = operation;
+  const payload = operation?.version?.payload;
+  if (!payload) return;
+  document.getElementById("specialOpsPinDetail").classList.add("hidden");
+  document.getElementById("specialOpsIncidentDetail").classList.add("hidden");
+  const pins = Array.isArray(payload.pins) ? payload.pins : [];
+  const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
+  const agencies = Array.isArray(payload.agencies) ? payload.agencies : [];
+  const searchInput = document.getElementById("specialOpsSearch");
+  const search = String(searchInput?.value || "").trim().toLowerCase();
+  const matches = record => !search || JSON.stringify(record).toLowerCase().includes(search);
+  const visiblePins = pins.filter(matches);
+  const visibleIncidents = incidents.filter(matches);
+
+  document.getElementById("specialOperationsDashboard").classList.remove("hidden");
+  document.getElementById("specialOperationsEmpty").classList.add("hidden");
+  document.getElementById("specialOpsPinCount").textContent = pins.length.toLocaleString("en-US");
+  document.getElementById("specialOpsAgencyCount").textContent = agencies.length.toLocaleString("en-US");
+  document.getElementById("specialOpsIncidentCount").textContent = incidents.length.toLocaleString("en-US");
+  const paxTotal = pins.reduce((total, pin) => {
+    const parsed = Number(String(pin.pax ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/)?.[0]);
+    return total + (Number.isFinite(parsed) ? parsed : 0);
+  }, 0);
+  document.getElementById("specialOpsPaxCount").textContent = paxTotal.toLocaleString("en-US");
+  document.getElementById("specialOpsHeading").textContent = operation.name || operation.version.name || "Special event operation";
+  const meta = [
+    operation.period || operation.version.period,
+    `Version ${operation.versionCount || 1}`,
+    `Updated ${formatOperationDate(operation.updatedAt)}`,
+    operation.version.payload.preparedBy ? `Prepared by ${operation.version.payload.preparedBy}` : "",
+    operation.version.sourceFileName ? `Source: ${operation.version.sourceFileName}` : ""
+  ].filter(Boolean);
+  document.getElementById("specialOpsMeta").textContent = meta.join(" · ");
+  document.getElementById("specialOpsPinTableSubhead").textContent = `${visiblePins.length.toLocaleString("en-US")} of ${pins.length.toLocaleString("en-US")} assignments`;
+  document.getElementById("specialOpsIncidentTableCount").textContent = `${visibleIncidents.length} shown`;
+
+  const pinsTable = document.getElementById("specialOpsPinsTable");
+  pinsTable.innerHTML = visiblePins.length ? visiblePins.map(pin => `
+    <tr tabindex="0" role="button" data-ops-pin-id="${escapeHtml(pin.id)}" class="ops-table-row border-b cursor-pointer" style="border-color:var(--border)">
+      <td class="py-2.5 px-3"><div class="font-semibold">${escapeHtml(pin.location || "Unspecified location")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml(pin.municipality || "")}</div></td>
+      <td class="py-2.5 px-2"><div>${escapeHtml(pin.agency || "—")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml(pin.category || "")}</div></td>
+      <td class="py-2.5 px-2 text-right font-semibold">${escapeHtml(pin.pax || "—")}</td>
+    </tr>`).join("") : `<tr><td colspan="3" class="p-5 text-center" style="color:var(--muted)">${search ? "No deployments match this search." : "No deployment pins in this version."}</td></tr>`;
+
+  const incidentTable = document.getElementById("specialOpsIncidentsTable");
+  incidentTable.innerHTML = visibleIncidents.length ? visibleIncidents.map(incident => `
+    <tr tabindex="0" role="button" data-ops-incident-id="${escapeHtml(incident.id)}" class="ops-table-row border-b cursor-pointer" style="border-color:var(--border)">
+      <td class="py-2.5 px-3"><div class="font-semibold">${escapeHtml(incident.incidentType || "Incident")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml([incident.date, incident.time].filter(Boolean).join(" · "))}</div></td>
+      <td class="py-2.5 px-2"><div>${escapeHtml(incident.location || "—")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml(incident.municipality || "")}</div></td>
+      <td class="py-2.5 px-2 max-w-[280px]"><div class="truncate">${escapeHtml(incident.actionTaken || incident.respondingUnit || "—")}</div></td>
+      <td class="py-2.5 px-2">${escapeHtml(incident.status || "—")}</td>
+    </tr>`).join("") : `<tr><td colspan="4" class="p-5 text-center" style="color:var(--muted)">${search ? "No incidents match this search." : "No incident records in this version."}</td></tr>`;
+
+  const agenciesList = document.getElementById("specialOpsAgencyList");
+  const visibleAgencies = agencies.filter(matches);
+  agenciesList.innerHTML = visibleAgencies.length ? visibleAgencies.map(agency => `
+    <div class="px-3.5 py-2.5 flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-xs font-semibold truncate">${escapeHtml(agency.name || "Unnamed agency")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml(agency.category || "")}</div></div><i class="ri-building-line shrink-0" style="color:var(--channel)"></i></div>`).join("")
+    : `<div class="p-4 text-xs" style="color:var(--muted)">${search ? "No agencies match this search." : "No agencies listed."}</div>`;
+
+  pinsTable.querySelectorAll("[data-ops-pin-id]").forEach(row => {
+    const openPin = () => showSpecialOperationPinDetail(row.dataset.opsPinId);
+    row.addEventListener("click", openPin);
+    row.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPin(); } });
+  });
+  incidentTable.querySelectorAll("[data-ops-incident-id]").forEach(row => {
+    const openIncident = () => showSpecialOperationIncidentDetail(row.dataset.opsIncidentId);
+    row.addEventListener("click", openIncident);
+    row.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openIncident(); } });
+  });
+
+  renderSpecialOperationsMap(visiblePins, visibleIncidents, pins.length, incidents.length);
+  const note = document.getElementById("specialOpsNotes");
+  if (note) {
+    const meetingNotes = String(payload.meetingNotes || "").trim();
+    note.textContent = meetingNotes;
+    note.closest("section")?.classList.toggle("hidden", !meetingNotes);
+  }
+}
+
+function renderSpecialOperationsMap(pins, incidents, allPinCount, allIncidentCount) {
+  const operationKey = `${specialOperationsCurrent?.id || ""}/${specialOperationsCurrent?.version?.id || ""}`;
+  const shouldFitBounds = operationKey !== specialOperationsMapRenderedKey;
+  const mapReady = ensureSpecialOperationsMap();
+  if (!mapReady) {
+    document.getElementById("specialOpsMapCount").textContent = "The map service did not load. Use the assignment and incident tables below.";
+    return;
+  }
+  specialOperationsLayer.clearLayers();
+  specialOperationsMapRenderedKey = operationKey;
+  specialOperationsMarkerById = new Map();
+  specialOperationsIncidentMarkerById = new Map();
+  const points = [];
+  const pinColors = { LGU: "#2C6586", NGO: "#2F7360", "Volunteer Groups": "#A85A12", "Other Agencies": "#52616B" };
+  pins.forEach(pin => {
+    const lat = Number(pin.lat); const lng = Number(pin.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const color = pinColors[pin.category] || pinColors["Other Agencies"];
+    const marker = window.L.circleMarker([lat, lng], { radius: 6, color: "#fff", weight: 1.5, fillColor: color, fillOpacity: .95, className: "ops-marker" })
+      .bindPopup(specialOperationPopupHtml(pin));
+    marker.addTo(specialOperationsLayer);
+    marker.on("click", () => showSpecialOperationPinDetail(pin.id));
+    specialOperationsMarkerById.set(String(pin.id), marker);
+    points.push([lat, lng]);
+  });
+  incidents.forEach(incident => {
+    if (incident.lat === null || incident.lat === undefined || String(incident.lat).trim() === ""
+      || incident.lng === null || incident.lng === undefined || String(incident.lng).trim() === "") return;
+    const lat = Number(incident.lat); const lng = Number(incident.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const marker = window.L.circleMarker([lat, lng], { radius: 8, color: "#fff", weight: 1.5, fillColor: "#9A332C", fillOpacity: .96, className: "ops-marker" })
+      .bindPopup(specialOperationPopupHtml(incident, true));
+    marker.addTo(specialOperationsLayer);
+    marker.on("click", () => showSpecialOperationIncidentDetail(incident.id));
+    specialOperationsIncidentMarkerById.set(String(incident.id), marker);
+    points.push([lat, lng]);
+  });
+  document.getElementById("specialOpsMapCount").textContent = `${pins.length} of ${allPinCount} deployment pins · ${incidents.length} of ${allIncidentCount} incidents${points.length < pins.length + incidents.length ? " · Some records have no mappable coordinates" : ""}`;
+  if (shouldFitBounds && points.length === 1) specialOperationsMap.setView(points[0], 13);
+  else if (shouldFitBounds && points.length > 1) specialOperationsMap.fitBounds(window.L.latLngBounds(points), { padding: [24, 24], maxZoom: 13 });
+  else if (shouldFitBounds) specialOperationsMap.setView([15.48, 120.59], 9);
+}
+
+function showSpecialOperationPinDetail(pinId) {
+  const pins = specialOperationsCurrent?.version?.payload?.pins || [];
+  const pin = pins.find(item => String(item.id) === String(pinId));
+  if (!pin) return;
+  const detail = document.getElementById("specialOpsPinDetail");
+  const assets = [
+    ...Object.entries(pin.assetCounts || {}).map(([label, count]) => `${label}: ${count}`),
+    ...(Array.isArray(pin.assets) ? pin.assets.map(asset => typeof asset === "string" ? asset : asset?.name || asset?.type || "") : [])
+  ].filter(Boolean);
+  detail.innerHTML = `<div class="flex items-start justify-between gap-2"><div><div class="font-bold">${escapeHtml(pin.location)}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml(pin.municipality || "")}</div></div><button type="button" id="specialOpsCloseDetail" class="shadcn-control px-2 py-1 text-[10px]" aria-label="Close assignment details"><i class="ri-close-line"></i></button></div><div class="space-y-1.5">${valuePairsHtml(pin, [["Agency", pin.agency], ["Category", pin.category], ["Assigned PAX", pin.pax], ["Focal person", pin.focalPerson], ["Contact", pin.contactNumber], ["Task", pin.task], ["Remarks", pin.remarks]])}${assets.length ? `<div class="grid grid-cols-[112px_1fr] gap-2"><span style="color:var(--muted)">Assets</span><span class="font-medium break-words">${assets.map(escapeHtml).join(", ")}</span></div>` : ""}</div>`;
+  detail.classList.remove("hidden");
+  document.getElementById("specialOpsCloseDetail").addEventListener("click", () => detail.classList.add("hidden"));
+  document.querySelectorAll("#specialOpsPinsTable tr").forEach(row => row.classList.toggle("is-selected", row.dataset.opsPinId === String(pinId)));
+  const marker = specialOperationsMarkerById.get(String(pinId));
+  if (marker && specialOperationsMap) {
+    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, specialOperationsMap.getZoom()), { animate: true, duration: .3 });
+    marker.openPopup();
+  }
+}
+
+function showSpecialOperationIncidentDetail(incidentId) {
+  const incidents = specialOperationsCurrent?.version?.payload?.incidents || [];
+  const incident = incidents.find(item => String(item.id) === String(incidentId));
+  if (!incident) return;
+  const detail = document.getElementById("specialOpsIncidentDetail");
+  detail.innerHTML = `<div class="flex items-start justify-between gap-2"><div><div class="font-bold">${escapeHtml(incident.incidentType || "Incident")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml([incident.date, incident.time].filter(Boolean).join(" · "))}</div></div><button type="button" id="specialOpsCloseIncidentDetail" class="shadcn-control px-2 py-1 text-[10px]" aria-label="Close incident details"><i class="ri-close-line"></i></button></div><div class="space-y-1.5">${valuePairsHtml(incident, [["Area", [incident.location, incident.municipality].filter(Boolean).join(" · ")], ["Affected", incident.affectedCount], ["Reported by", incident.reporterName], ["Reporter contact", incident.reporterContact], ["Responding unit", incident.respondingUnit], ["Action taken", incident.actionTaken], ["Status", incident.status]])}</div>`;
+  detail.classList.remove("hidden");
+  document.getElementById("specialOpsCloseIncidentDetail").addEventListener("click", () => detail.classList.add("hidden"));
+  const marker = specialOperationsIncidentMarkerById.get(String(incidentId));
+  if (marker && specialOperationsMap) {
+    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, specialOperationsMap.getZoom()), { animate: true, duration: .3 });
+    marker.openPopup();
+  }
 }
 
 function getActiveFieldOversight(updateNo) {
@@ -1792,17 +2028,94 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   const navGovBtn = document.getElementById("navGovBtn");
+  const navSpecialOpsBtn = document.getElementById("navSpecialOpsBtn");
   const navOpcenBtn = document.getElementById("navOpcenBtn");
   const govScreen = document.getElementById("govScreen");
+  const specialOperationsScreen = document.getElementById("specialOperationsScreen");
   const opcenScreen = document.getElementById("opcenScreen");
   const secCue = document.getElementById("securityRoleCue");
+  let specialOperationsViewer = false;
+  let availableSpecialOperations = [];
+
+  async function refreshSpecialOperations(admin, viewer, preferredId = "") {
+    specialOperationsViewer = Boolean(viewer);
+    const gate = document.getElementById("specialOperationsGate");
+    const adminUpload = document.getElementById("specialOperationsAdminUpload");
+    const dashboard = document.getElementById("specialOperationsDashboard");
+    const empty = document.getElementById("specialOperationsEmpty");
+    const selectWrap = document.getElementById("specialOperationsSelectWrap");
+    const accessBadge = document.getElementById("specialOperationsAccessBadge");
+    const gateText = document.getElementById("specialOperationsGateText");
+
+    adminUpload.classList.toggle("hidden", !admin);
+    gate.classList.toggle("hidden", Boolean(viewer));
+    dashboard.classList.add("hidden");
+    empty.classList.add("hidden");
+    selectWrap.classList.add("hidden");
+    if (!viewer) {
+      accessBadge.className = "shadcn-badge badge-warning";
+      accessBadge.innerHTML = `<i class="ri-lock-2-line"></i><span>Approved access required</span>`;
+      gateText.textContent = auth.currentUser
+        ? "This signed-in account has not been approved to view special operations. Ask the portal administrator to authorize this Google account."
+        : "These operation records may include staff and incident contact details, so they are not available to public visitors.";
+      return;
+    }
+
+    accessBadge.className = admin ? "shadcn-badge badge-success" : "shadcn-badge badge-neutral";
+    accessBadge.innerHTML = admin
+      ? `<i class="ri-shield-check-line"></i><span>Administrator view</span>`
+      : `<i class="ri-eye-line"></i><span>Governor view · read only</span>`;
+    try {
+      availableSpecialOperations = await listSpecialOperations(Boolean(admin));
+      const select = document.getElementById("specialOperationsSelect");
+      select.replaceChildren();
+      availableSpecialOperations.forEach(operation => {
+        const option = document.createElement("option");
+        option.value = operation.id;
+        option.textContent = `${operation.name || operation.id}${operation.period ? ` · ${operation.period}` : ""}`;
+        select.append(option);
+      });
+      if (!availableSpecialOperations.length) {
+        specialOperationsCurrent = null;
+        selectWrap.classList.add("hidden");
+        empty.classList.remove("hidden");
+        return;
+      }
+      selectWrap.classList.remove("hidden");
+      const selectedId = availableSpecialOperations.some(item => item.id === preferredId)
+        ? preferredId
+        : availableSpecialOperations.some(item => item.id === select.value) ? select.value : availableSpecialOperations[0].id;
+      select.value = selectedId;
+      const operation = await loadSpecialOperation(selectedId);
+      renderSpecialOperationsDashboard(operation);
+    } catch (error) {
+      dashboard.classList.add("hidden");
+      setSpecialOperationsStatus(`Could not load operation data: ${error.message}`, "error");
+    }
+  }
 
   navGovBtn.addEventListener("click", () => {
     govScreen.classList.remove("hidden");
+    specialOperationsScreen.classList.add("hidden");
     opcenScreen.classList.add("hidden");
     navGovBtn.classList.add("is-active");
+    navSpecialOpsBtn.classList.remove("is-active");
     navOpcenBtn.classList.remove("is-active");
     secCue.innerHTML = `<i class="ri-eye-line"></i><span>View only</span>`;
+  });
+
+  navSpecialOpsBtn.addEventListener("click", async () => {
+    govScreen.classList.add("hidden");
+    opcenScreen.classList.add("hidden");
+    specialOperationsScreen.classList.remove("hidden");
+    specialOperationsScreen.classList.remove("operations-enter");
+    void specialOperationsScreen.offsetWidth;
+    specialOperationsScreen.classList.add("operations-enter");
+    navGovBtn.classList.remove("is-active");
+    navSpecialOpsBtn.classList.add("is-active");
+    navOpcenBtn.classList.remove("is-active");
+    secCue.innerHTML = `<i class="ri-eye-line"></i><span>${window.pdrrmoFirebaseAdmin ? "Admin · operation upload" : specialOperationsViewer ? "Approved view · read only" : "Access restricted"}</span>`;
+    await refreshSpecialOperations(Boolean(window.pdrrmoFirebaseAdmin), specialOperationsViewer);
   });
 
   navOpcenBtn.addEventListener("click", () => {
@@ -1812,8 +2125,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     opcenScreen.classList.remove("hidden");
     govScreen.classList.add("hidden");
+    specialOperationsScreen.classList.add("hidden");
     navOpcenBtn.classList.add("is-active");
     navGovBtn.classList.remove("is-active");
+    navSpecialOpsBtn.classList.remove("is-active");
     secCue.innerHTML = `<i class="ri-shield-keyhole-line"></i><span>Operations Center encoder</span>`;
   });
 
@@ -2060,6 +2375,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const signOutBtn = document.getElementById("firebaseSignOutBtn");
   const adminUidWrap = document.getElementById("firebaseAdminUidWrap");
   const adminUid = document.getElementById("firebaseAdminUid");
+  const firebaseRoleUidHint = document.getElementById("firebaseRoleUidHint");
   const opcenNav = document.getElementById("navOpcenBtn");
   const restoreLabel = document.getElementById("firebaseRestoreLabel");
   const backupStatus = document.getElementById("firebaseBackupStatus");
@@ -2128,34 +2444,163 @@ document.addEventListener("DOMContentLoaded", async () => {
     catch (error) { authStatus.textContent = `Sign-out failed: ${error.message}`; }
   });
 
+  document.getElementById("specialOperationsSignInBtn").addEventListener("click", async () => {
+    try { await signInAdmin(); }
+    catch (error) { setSpecialOperationsStatus(`Google sign-in failed: ${error.message}`, "error"); }
+  });
+  document.getElementById("specialOperationJsonInput").addEventListener("change", async event => {
+    const file = event.target.files?.[0];
+    specialOperationsPending = null;
+    const preview = document.getElementById("specialOperationPreview");
+    const publishButton = document.getElementById("specialOperationPublishBtn");
+    const fileLabel = document.getElementById("specialOperationFileLabel");
+    document.getElementById("specialOperationsStatus").classList.add("hidden");
+    if (!file) {
+      preview.classList.add("hidden");
+      publishButton.disabled = true;
+      fileLabel.textContent = "Choose JSON from this computer";
+      return;
+    }
+    fileLabel.textContent = file.name;
+    try {
+      const payload = validateDeploymentExport(JSON.parse(await file.text()));
+      specialOperationsPending = { file, payload };
+      document.getElementById("specialOperationPreviewFile").textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+      document.getElementById("specialOperationPreviewState").textContent = "JSON validated";
+      document.getElementById("specialOperationPreviewCounts").innerHTML = [
+        [payload.pins.length, "Deployments"], [payload.agencies.length, "Agencies"], [payload.incidents.length, "Incidents"]
+      ].map(([count, label]) => `<div class="rounded-lg p-2.5" style="background:var(--bg-card);border:1px solid var(--border)"><div class="text-lg font-bold">${Number(count).toLocaleString("en-US")}</div><div class="text-[10px]" style="color:var(--muted)">${label}</div></div>`).join("");
+      const existingName = document.getElementById("specialOperationName").value.trim();
+      if (!existingName && payload.operationTitle && payload.operationTitle !== "Area Assignment & Deployment Plan") {
+        document.getElementById("specialOperationName").value = payload.operationTitle;
+      }
+      preview.classList.remove("hidden");
+      const notice = document.getElementById("specialOperationUploadNotice");
+      notice.classList.add("hidden");
+      publishButton.disabled = !document.getElementById("specialOperationName").value.trim();
+      const uploadNotes = [];
+      if (payload.incidents.some(record => record.reporterName || record.reporterContact)
+        || payload.pins.some(record => record.focalPerson || record.contactNumber)) {
+        uploadNotes.push("This file contains staff or reporter contact details. Only approved viewers and portal administrators can access the published records.");
+      }
+      if (!Array.isArray(payload.standaloneAssets)) {
+        uploadNotes.push("This desktop app export does not include separately dropped tactical assets. Pins and incident records in this file are included.");
+      }
+      if (uploadNotes.length) {
+        notice.textContent = uploadNotes.join(" ");
+        notice.style.backgroundColor = "var(--amber-bg)";
+        notice.style.color = "var(--amber)";
+        notice.classList.remove("hidden");
+      }
+    } catch (error) {
+      preview.classList.add("hidden");
+      setSpecialOperationsStatus(error.message, "error");
+    }
+  });
+  document.getElementById("specialOperationName").addEventListener("input", event => {
+    document.getElementById("specialOperationPublishBtn").disabled = !specialOperationsPending || !event.target.value.trim();
+  });
+  document.getElementById("specialOperationPublishBtn").addEventListener("click", async event => {
+    if (!window.pdrrmoFirebaseAdmin || !specialOperationsPending) return;
+    const button = event.currentTarget;
+    const name = document.getElementById("specialOperationName").value.trim();
+    let operationId;
+    try { operationId = operationIdFromName(name); }
+    catch (error) { setSpecialOperationsStatus(error.message, "error"); return; }
+    const existing = availableSpecialOperations.find(operation => operation.id === operationId);
+    const action = existing
+      ? `This will publish a new version of “${name}”. The previous version will remain in the archive, and this version will become the one viewers see.`
+      : `Publish “${name}” for approved viewers? The uploaded map and records will be read-only in the viewer.`;
+    if (!window.confirm(`${action}\n\n${specialOperationsPending.payload.pins.length} deployments · ${specialOperationsPending.payload.agencies.length} agencies · ${specialOperationsPending.payload.incidents.length} incidents`)) return;
+
+    button.disabled = true;
+    button.innerHTML = `<i class="ri-loader-4-line animate-spin"></i><span>Publishing version…</span>`;
+    try {
+      const result = await publishSpecialOperation({
+        operationId,
+        name,
+        period: document.getElementById("specialOperationPeriod").value,
+        sourceFileName: specialOperationsPending.file.name,
+        payload: specialOperationsPending.payload
+      });
+      setSpecialOperationsStatus(`Published ${name} · version ${result.versionCount}. Approved viewers can now open it.`, "success");
+      specialOperationsPending = null;
+      document.getElementById("specialOperationJsonInput").value = "";
+      document.getElementById("specialOperationFileLabel").textContent = "Choose JSON from this computer";
+      document.getElementById("specialOperationPreview").classList.add("hidden");
+      document.getElementById("specialOperationName").value = "";
+      document.getElementById("specialOperationPeriod").value = "";
+      await refreshSpecialOperations(true, true, result.operationId);
+      showStatusToast(`Published ${name} for governor view.`);
+    } catch (error) {
+      setSpecialOperationsStatus(`Could not publish this upload: ${error.message}`, "error");
+    } finally {
+      button.disabled = !specialOperationsPending || !document.getElementById("specialOperationName").value.trim();
+      button.innerHTML = `<i class="ri-cloud-line"></i><span>Publish this version</span>`;
+    }
+  });
+  document.getElementById("specialOperationsSelect").addEventListener("change", async event => {
+    try {
+      const operation = await loadSpecialOperation(event.target.value);
+      document.getElementById("specialOpsSearch").value = "";
+      document.getElementById("specialOpsPinDetail").classList.add("hidden");
+      document.getElementById("specialOpsIncidentDetail").classList.add("hidden");
+      renderSpecialOperationsDashboard(operation);
+    } catch (error) {
+      setSpecialOperationsStatus(`Could not open this operation: ${error.message}`, "error");
+    }
+  });
+  document.getElementById("specialOpsSearch").addEventListener("input", () => {
+    if (specialOperationsCurrent) renderSpecialOperationsDashboard(specialOperationsCurrent);
+  });
+
   watchAuth(async user => {
     signInBtn.classList.toggle("hidden", Boolean(user));
     signOutBtn.classList.toggle("hidden", !user);
     adminUidWrap.classList.toggle("hidden", !user);
     adminUid.textContent = user?.uid || "";
     window.pdrrmoFirebaseAdmin = false;
+    window.pdrrmoSpecialOperationsViewer = false;
     let admin = false;
+    let operationViewer = false;
     if (user) {
       authStatus.textContent = `Signed in: ${user.email || "Google account"}`;
       try { admin = await isPortalAdmin(user); }
       catch (error) { authStatus.textContent = `Signed in; Firebase setup pending: ${error.message}`; }
+      try { operationViewer = await isSpecialOperationsViewer(user, admin); }
+      catch (error) { setSpecialOperationsStatus(`Could not check approved viewer access: ${error.message}`, "error"); }
       if (!admin) {
-        authStatus.textContent = "Signed in, but this account is not enabled as a portal administrator.";
+        authStatus.textContent = operationViewer
+          ? `Signed in: ${user.email || "Google account"} · approved governor view`
+          : "Signed in, but this account is not enabled as a portal administrator or special operations viewer.";
       }
+      firebaseRoleUidHint.innerHTML = admin
+        ? "This account has portal administrator access."
+        : operationViewer
+          ? `For future access changes, use <code>operationViewers/{uid}</code> with <code>enabled: true</code>.`
+          : `Ask the Firebase project owner to add this UID to <code>admins/{uid}</code> or <code>operationViewers/{uid}</code> with <code>enabled: true</code>.`;
     } else {
-      authStatus.textContent = "Public view · Firebase sign-in available for staff";
+      authStatus.textContent = "Public view · sign-in available for staff and approved viewers";
     }
     window.pdrrmoFirebaseAdmin = admin;
+    window.pdrrmoSpecialOperationsViewer = operationViewer;
     opcenNav.classList.toggle("hidden", !admin);
     restoreLabel.classList.toggle("hidden", !admin);
     newEventBtn.classList.toggle("hidden", !admin);
     nextSitrepBtn.classList.toggle("hidden", !admin);
     saveDraftBtn.classList.toggle("hidden", !admin);
     if (!admin) {
-      document.getElementById("govScreen").classList.remove("hidden");
-      document.getElementById("opcenScreen").classList.add("hidden");
-      document.getElementById("navGovBtn").classList.add("is-active");
+      if (specialOperationsScreen.classList.contains("hidden")) {
+        document.getElementById("govScreen").classList.remove("hidden");
+        document.getElementById("opcenScreen").classList.add("hidden");
+        document.getElementById("navGovBtn").classList.add("is-active");
+        navSpecialOpsBtn.classList.remove("is-active");
+      }
       opcenNav.classList.remove("is-active");
+    }
+    specialOperationsViewer = operationViewer;
+    if (!specialOperationsScreen.classList.contains("hidden")) {
+      await refreshSpecialOperations(admin, operationViewer);
     }
     await refreshFirebaseEventOptions(admin);
     govFirebaseStatus.textContent = backupStatus.textContent;
