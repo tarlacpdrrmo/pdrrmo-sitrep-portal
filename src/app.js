@@ -129,7 +129,7 @@ function ensureSpecialOperationsMap() {
   const container = document.getElementById("specialOperationsMap");
   if (!container || typeof window.L === "undefined") return false;
   if (!specialOperationsMap) {
-    specialOperationsMap = window.L.map(container, { scrollWheelZoom: false, zoomControl: true }).setView([15.48, 120.59], 9);
+    specialOperationsMap = window.L.map(container, { scrollWheelZoom: false, zoomControl: false }).setView([15.48, 120.59], 9);
     window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'
@@ -146,6 +146,12 @@ function ensureSpecialOperationsMap() {
           })
         }).addTo(specialOperationsMap)
       : window.L.featureGroup().addTo(specialOperationsMap);
+    document.getElementById("specialOpsMapFitBtn")?.addEventListener("click", fitSpecialOperationsMap);
+    document.getElementById("specialOpsMapHomeBtn")?.addEventListener("click", () => {
+      if (specialOperationsMap) specialOperationsMap.setView([15.48, 120.59], 9, { animate: true, duration: .35 });
+    });
+    document.getElementById("specialOpsMapZoomInBtn")?.addEventListener("click", () => specialOperationsMap?.zoomIn());
+    document.getElementById("specialOpsMapZoomOutBtn")?.addEventListener("click", () => specialOperationsMap?.zoomOut());
   }
   window.setTimeout(() => specialOperationsMap?.invalidateSize(), 80);
   return true;
@@ -171,6 +177,30 @@ function specialOperationPopupHtml(record, incident = false) {
   return `<div class="ops-popup"><div class="ops-popup-title">${escapeHtml(title)}</div><div class="ops-popup-line">${escapeHtml(secondary)}</div>${incident
     ? `<div class="ops-popup-line">${escapeHtml(record.status || "Incident record")}</div>`
     : `<div class="ops-popup-line">${escapeHtml(record.task || record.category || "Deployment pin")}</div>`}</div>`;
+}
+
+function getSpecialOperationCoordinates() {
+  const payload = specialOperationsCurrent?.version?.payload || {};
+  const records = [
+    ...(Array.isArray(payload.pins) ? payload.pins : []),
+    ...(Array.isArray(payload.incidents) ? payload.incidents : [])
+  ];
+  return records.flatMap(record => {
+    const lat = Number(record.lat);
+    const lng = Number(record.lng);
+    return record.lat !== null && record.lat !== undefined && String(record.lat).trim() !== ""
+      && record.lng !== null && record.lng !== undefined && String(record.lng).trim() !== ""
+      && Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+      ? [[lat, lng]] : [];
+  });
+}
+
+function fitSpecialOperationsMap() {
+  if (!specialOperationsMap) return;
+  const points = getSpecialOperationCoordinates();
+  if (points.length === 1) specialOperationsMap.setView(points[0], 13, { animate: true, duration: .35 });
+  else if (points.length > 1) specialOperationsMap.fitBounds(window.L.latLngBounds(points), { padding: [48, 48], maxZoom: 13, animate: true, duration: .35 });
+  else specialOperationsMap.setView([15.48, 120.59], 9, { animate: true, duration: .35 });
 }
 
 function renderSpecialOperationsDashboard(operation) {
@@ -266,11 +296,10 @@ function renderSpecialOperationsMap(pins, incidents, allPinCount, allIncidentCou
   specialOperationsMarkerById = new Map();
   specialOperationsIncidentMarkerById = new Map();
   const points = [];
-  const pinColors = { LGU: "#2C6586", NGO: "#2F7360", "Volunteer Groups": "#A85A12", "Other Agencies": "#52616B" };
   pins.forEach(pin => {
     const lat = Number(pin.lat); const lng = Number(pin.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    const color = pinColors[pin.category] || pinColors["Other Agencies"];
+    const color = "#2C6586";
     const marker = window.L.circleMarker([lat, lng], { radius: 6, color: "#fff", weight: 1.5, fillColor: color, fillOpacity: .95, className: "ops-marker" })
       .bindPopup(specialOperationPopupHtml(pin));
     marker.addTo(specialOperationsLayer);
@@ -291,9 +320,7 @@ function renderSpecialOperationsMap(pins, incidents, allPinCount, allIncidentCou
     points.push([lat, lng]);
   });
   document.getElementById("specialOpsMapCount").textContent = `${pins.length} of ${allPinCount} deployment pins · ${incidents.length} of ${allIncidentCount} incidents${points.length < pins.length + incidents.length ? " · Some records have no mappable coordinates" : ""}`;
-  if (shouldFitBounds && points.length === 1) specialOperationsMap.setView(points[0], 13);
-  else if (shouldFitBounds && points.length > 1) specialOperationsMap.fitBounds(window.L.latLngBounds(points), { padding: [24, 24], maxZoom: 13 });
-  else if (shouldFitBounds) specialOperationsMap.setView([15.48, 120.59], 9);
+  if (shouldFitBounds) fitSpecialOperationsMap();
 }
 
 function showSpecialOperationPinDetail(pinId) {
@@ -311,7 +338,7 @@ function showSpecialOperationPinDetail(pinId) {
   document.querySelectorAll("#specialOpsPinsTable tr").forEach(row => row.classList.toggle("is-selected", row.dataset.opsPinId === String(pinId)));
   const marker = specialOperationsMarkerById.get(String(pinId));
   if (marker && specialOperationsMap) {
-    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, specialOperationsMap.getZoom()), { animate: true, duration: .3 });
+    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, Math.min(15, specialOperationsMap.getZoom())), { animate: true, duration: .3 });
     marker.openPopup();
   }
 }
@@ -326,7 +353,7 @@ function showSpecialOperationIncidentDetail(incidentId) {
   document.getElementById("specialOpsCloseIncidentDetail").addEventListener("click", () => detail.classList.add("hidden"));
   const marker = specialOperationsIncidentMarkerById.get(String(incidentId));
   if (marker && specialOperationsMap) {
-    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, specialOperationsMap.getZoom()), { animate: true, duration: .3 });
+    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, Math.min(15, specialOperationsMap.getZoom())), { animate: true, duration: .3 });
     marker.openPopup();
   }
 }
