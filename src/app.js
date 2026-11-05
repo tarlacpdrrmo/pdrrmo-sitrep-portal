@@ -131,7 +131,7 @@ function ensureSpecialOperationsMap() {
   const container = document.getElementById("specialOperationsMap");
   if (!container || typeof window.L === "undefined") return false;
   if (!specialOperationsMap) {
-    specialOperationsMap = window.L.map(container, { scrollWheelZoom: false, zoomControl: false, zoomSnap: 0.5, zoomDelta: 0.5 }).setView([15.48, 120.59], 9);
+    specialOperationsMap = window.L.map(container, { scrollWheelZoom: true, zoomControl: false, zoomSnap: 0.5, zoomDelta: 0.5 }).setView([15.48, 120.59], 9);
     window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'
