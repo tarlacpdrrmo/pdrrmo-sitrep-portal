@@ -228,6 +228,8 @@
       background: var(--bg-card);
     }
     .ops-map-zoom { width: 40px; justify-content: center; font-size: 16px !important; }
+    .ops-map-legend { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .ops-map-swatch { width: 9px; height: 9px; border: 1px solid rgba(15, 23, 42, .2); border-radius: 9999px; }
     @media (max-width: 480px) {
       .ops-map-toolbar { top: 8px; left: 8px; gap: 5px; max-width: calc(100% - 16px); }
       .ops-map-toolbar button { min-height: 36px; padding-left: 9px !important; padding-right: 9px !important; font-size: 11px !important; }
@@ -740,10 +742,8 @@
       <section class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         <article class="xl:col-span-7 shadcn-card overflow-hidden">
           <div class="px-4 py-3 hairline-b flex flex-wrap items-center justify-between gap-2" style="background: var(--bg-subtle);">
-            <div><h2 class="text-sm font-bold">Deployment and incident map</h2><p class="text-[11px]" style="color: var(--muted);">Blue markers are deployments; red markers are incidents. Select one to see its record. Use +/− to zoom; scroll-wheel zoom is off.</p></div>
-            <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
-              <span class="shadcn-badge badge-water">● Deployment</span><span class="shadcn-badge" style="background:var(--brick-bg);color:var(--brick);">● Incident</span>
-            </div>
+            <div><h2 class="text-sm font-bold">Deployment and incident map</h2><p class="text-[11px]" style="color: var(--muted);">Marker colors show agency type; red marks incidents. Cluster numbers group nearby locations. Select a row or marker for details. Use plus/minus to zoom; scroll-wheel zoom is off.</p></div>
+            <div class="flex flex-wrap items-center gap-1.5 text-[10px]"><span class="ops-map-legend"><span class="ops-map-swatch" style="background:#2C6586"></span>LGU</span><span class="ops-map-legend"><span class="ops-map-swatch" style="background:#2F7360"></span>NGO</span><span class="ops-map-legend"><span class="ops-map-swatch" style="background:#A85A12"></span>Volunteer groups</span><span class="ops-map-legend"><span class="ops-map-swatch" style="background:#52616B"></span>Other agency</span><span class="ops-map-legend"><span class="ops-map-swatch" style="background:#9A332C"></span>Incident</span></div>
           </div>
           <div class="relative">
             <div class="ops-map-toolbar" role="group" aria-label="Map navigation">
@@ -759,21 +759,21 @@
 
         <article class="xl:col-span-5 shadcn-card overflow-hidden">
           <div class="px-4 py-3 hairline-b" style="background: var(--bg-subtle);"><h2 class="text-sm font-bold">Deployment assignments</h2><p id="specialOpsPinTableSubhead" class="text-[11px]" style="color: var(--muted);"></p></div>
+          <div id="specialOpsPinDetail" class="hidden p-3.5 hairline-b text-xs space-y-2" style="background: var(--bg-subtle);"></div>
           <div class="max-h-[560px] overflow-auto">
             <table class="w-full text-left border-collapse text-xs">
               <thead class="sticky top-0 hairline-b font-semibold" style="color: var(--muted); background: var(--bg-subtle);"><tr><th class="py-2 px-3">Area / location</th><th class="py-2 px-2">Agency</th><th class="py-2 px-2 text-right">PAX</th></tr></thead>
               <tbody id="specialOpsPinsTable"></tbody>
             </table>
           </div>
-          <div id="specialOpsPinDetail" class="hidden p-3.5 hairline-t text-xs space-y-2" style="background: var(--bg-subtle);"></div>
         </article>
       </section>
 
       <section class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         <article class="xl:col-span-8 shadcn-card overflow-hidden">
           <div class="px-4 py-3 hairline-b flex items-center justify-between gap-2" style="background: var(--bg-subtle);"><div><h2 class="text-sm font-bold">Incident log</h2><p class="text-[11px]" style="color: var(--muted);">Read-only records from the uploaded operation file.</p></div><span id="specialOpsIncidentTableCount" class="shadcn-badge badge-neutral"></span></div>
+          <div id="specialOpsIncidentDetail" class="hidden p-3.5 hairline-b text-xs space-y-2" style="background: var(--bg-subtle);"></div>
           <div class="overflow-x-auto"><table class="w-full min-w-[720px] text-left border-collapse text-xs"><thead class="hairline-b font-semibold" style="color: var(--muted); background: var(--bg-subtle);"><tr><th class="py-2 px-3">Date / incident</th><th class="py-2 px-2">Area</th><th class="py-2 px-2">Action / response</th><th class="py-2 px-2">Status</th></tr></thead><tbody id="specialOpsIncidentsTable"></tbody></table></div>
-          <div id="specialOpsIncidentDetail" class="hidden p-3.5 hairline-t text-xs space-y-2" style="background: var(--bg-subtle);"></div>
         </article>
         <article class="xl:col-span-4 shadcn-card overflow-hidden">
           <div class="px-4 py-3 hairline-b" style="background: var(--bg-subtle);"><h2 class="text-sm font-bold">Agency directory</h2><p class="text-[11px]" style="color: var(--muted);">Agencies included in this operation plan.</p></div>

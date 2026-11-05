@@ -78,6 +78,7 @@ let specialOperationsPending = null;
 let specialOperationsMarkerById = new Map();
 let specialOperationsIncidentMarkerById = new Map();
 let specialOperationsMapRenderedKey = "";
+let specialOperationsVisibleMapPoints = [];
 
 function fmtNum(n) {
   if (n === null || n === undefined || n === "-") return "-";
@@ -169,6 +170,15 @@ function valuePairsHtml(record, fields) {
     .join("");
 }
 
+function formatOperationCoordinates(record) {
+  const lat = Number(record?.lat);
+  const lng = Number(record?.lng);
+  if (record?.lat === null || record?.lat === undefined || String(record.lat).trim() === ""
+    || record?.lng === null || record?.lng === undefined || String(record.lng).trim() === ""
+    || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return "";
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
 function specialOperationPopupHtml(record, incident = false) {
   const title = incident ? (record.incidentType || "Reported incident") : (record.location || "Deployment location");
   const secondary = incident
@@ -179,28 +189,23 @@ function specialOperationPopupHtml(record, incident = false) {
     : `<div class="ops-popup-line">${escapeHtml(record.task || record.category || "Deployment pin")}</div>`}</div>`;
 }
 
-function getSpecialOperationCoordinates() {
-  const payload = specialOperationsCurrent?.version?.payload || {};
-  const records = [
-    ...(Array.isArray(payload.pins) ? payload.pins : []),
-    ...(Array.isArray(payload.incidents) ? payload.incidents : [])
-  ];
-  return records.flatMap(record => {
-    const lat = Number(record.lat);
-    const lng = Number(record.lng);
-    return record.lat !== null && record.lat !== undefined && String(record.lat).trim() !== ""
-      && record.lng !== null && record.lng !== undefined && String(record.lng).trim() !== ""
-      && Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
-      ? [[lat, lng]] : [];
-  });
-}
-
 function fitSpecialOperationsMap() {
   if (!specialOperationsMap) return;
-  const points = getSpecialOperationCoordinates();
+  const points = specialOperationsVisibleMapPoints;
   if (points.length === 1) specialOperationsMap.setView(points[0], 13, { animate: true, duration: .35 });
   else if (points.length > 1) specialOperationsMap.fitBounds(window.L.latLngBounds(points), { padding: [48, 48], maxZoom: 13, animate: true, duration: .35 });
   else specialOperationsMap.setView([15.48, 120.59], 9, { animate: true, duration: .35 });
+}
+
+function focusSpecialOperationMarker(marker) {
+  if (!marker || !specialOperationsMap) return;
+  const zoom = Math.max(12, Math.min(15, specialOperationsMap.getZoom()));
+  specialOperationsMap.setView(marker.getLatLng(), zoom, { animate: true, duration: .35 });
+  if (typeof specialOperationsLayer?.zoomToShowLayer === "function") {
+    specialOperationsLayer.zoomToShowLayer(marker, () => marker.openPopup());
+  } else {
+    marker.openPopup();
+  }
 }
 
 function renderSpecialOperationsDashboard(operation) {
@@ -296,10 +301,11 @@ function renderSpecialOperationsMap(pins, incidents, allPinCount, allIncidentCou
   specialOperationsMarkerById = new Map();
   specialOperationsIncidentMarkerById = new Map();
   const points = [];
+  const pinColors = { LGU: "#2C6586", NGO: "#2F7360", "Volunteer Groups": "#A85A12", "Other Agencies": "#52616B" };
   pins.forEach(pin => {
     const lat = Number(pin.lat); const lng = Number(pin.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    const color = "#2C6586";
+    const color = pinColors[pin.category] || pinColors["Other Agencies"];
     const marker = window.L.circleMarker([lat, lng], { radius: 6, color: "#fff", weight: 1.5, fillColor: color, fillOpacity: .95, className: "ops-marker" })
       .bindPopup(specialOperationPopupHtml(pin));
     marker.addTo(specialOperationsLayer);
@@ -320,6 +326,7 @@ function renderSpecialOperationsMap(pins, incidents, allPinCount, allIncidentCou
     points.push([lat, lng]);
   });
   document.getElementById("specialOpsMapCount").textContent = `${pins.length} of ${allPinCount} deployment pins · ${incidents.length} of ${allIncidentCount} incidents${points.length < pins.length + incidents.length ? " · Some records have no mappable coordinates" : ""}`;
+  specialOperationsVisibleMapPoints = points;
   if (shouldFitBounds) fitSpecialOperationsMap();
 }
 
@@ -328,19 +335,17 @@ function showSpecialOperationPinDetail(pinId) {
   const pin = pins.find(item => String(item.id) === String(pinId));
   if (!pin) return;
   const detail = document.getElementById("specialOpsPinDetail");
+  document.getElementById("specialOpsIncidentDetail").classList.add("hidden");
   const assets = [
     ...Object.entries(pin.assetCounts || {}).map(([label, count]) => `${label}: ${count}`),
     ...(Array.isArray(pin.assets) ? pin.assets.map(asset => typeof asset === "string" ? asset : asset?.name || asset?.type || "") : [])
   ].filter(Boolean);
-  detail.innerHTML = `<div class="flex items-start justify-between gap-2"><div><div class="font-bold">${escapeHtml(pin.location)}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml(pin.municipality || "")}</div></div><button type="button" id="specialOpsCloseDetail" class="shadcn-control px-2 py-1 text-[10px]" aria-label="Close assignment details"><i class="ri-close-line"></i></button></div><div class="space-y-1.5">${valuePairsHtml(pin, [["Agency", pin.agency], ["Category", pin.category], ["Assigned PAX", pin.pax], ["Focal person", pin.focalPerson], ["Contact", pin.contactNumber], ["Task", pin.task], ["Remarks", pin.remarks]])}${assets.length ? `<div class="grid grid-cols-[112px_1fr] gap-2"><span style="color:var(--muted)">Assets</span><span class="font-medium break-words">${assets.map(escapeHtml).join(", ")}</span></div>` : ""}</div>`;
+  detail.innerHTML = `<div class="flex items-start justify-between gap-2"><div><div class="font-bold">${escapeHtml(pin.location)}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml(pin.municipality || "")}</div></div><button type="button" id="specialOpsCloseDetail" class="shadcn-control px-2 py-1 text-[10px]" aria-label="Close assignment details"><i class="ri-close-line"></i></button></div><div class="space-y-1.5">${valuePairsHtml(pin, [["Agency", pin.agency], ["Category", pin.category], ["Assigned PAX", pin.pax], ["Map coordinates", formatOperationCoordinates(pin)], ["Focal person", pin.focalPerson], ["Contact", pin.contactNumber], ["Task", pin.task], ["Remarks", pin.remarks]])}${assets.length ? `<div class="grid grid-cols-[112px_1fr] gap-2"><span style="color:var(--muted)">Assets</span><span class="font-medium break-words">${assets.map(escapeHtml).join(", ")}</span></div>` : ""}</div>`;
   detail.classList.remove("hidden");
   document.getElementById("specialOpsCloseDetail").addEventListener("click", () => detail.classList.add("hidden"));
   document.querySelectorAll("#specialOpsPinsTable tr").forEach(row => row.classList.toggle("is-selected", row.dataset.opsPinId === String(pinId)));
   const marker = specialOperationsMarkerById.get(String(pinId));
-  if (marker && specialOperationsMap) {
-    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, Math.min(15, specialOperationsMap.getZoom())), { animate: true, duration: .3 });
-    marker.openPopup();
-  }
+  focusSpecialOperationMarker(marker);
 }
 
 function showSpecialOperationIncidentDetail(incidentId) {
@@ -348,14 +353,13 @@ function showSpecialOperationIncidentDetail(incidentId) {
   const incident = incidents.find(item => String(item.id) === String(incidentId));
   if (!incident) return;
   const detail = document.getElementById("specialOpsIncidentDetail");
-  detail.innerHTML = `<div class="flex items-start justify-between gap-2"><div><div class="font-bold">${escapeHtml(incident.incidentType || "Incident")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml([incident.date, incident.time].filter(Boolean).join(" · "))}</div></div><button type="button" id="specialOpsCloseIncidentDetail" class="shadcn-control px-2 py-1 text-[10px]" aria-label="Close incident details"><i class="ri-close-line"></i></button></div><div class="space-y-1.5">${valuePairsHtml(incident, [["Area", [incident.location, incident.municipality].filter(Boolean).join(" · ")], ["Affected", incident.affectedCount], ["Reported by", incident.reporterName], ["Reporter contact", incident.reporterContact], ["Responding unit", incident.respondingUnit], ["Action taken", incident.actionTaken], ["Status", incident.status]])}</div>`;
+  document.getElementById("specialOpsPinDetail").classList.add("hidden");
+  detail.innerHTML = `<div class="flex items-start justify-between gap-2"><div><div class="font-bold">${escapeHtml(incident.incidentType || "Incident")}</div><div class="text-[10px]" style="color:var(--muted)">${escapeHtml([incident.date, incident.time].filter(Boolean).join(" · "))}</div></div><button type="button" id="specialOpsCloseIncidentDetail" class="shadcn-control px-2 py-1 text-[10px]" aria-label="Close incident details"><i class="ri-close-line"></i></button></div><div class="space-y-1.5">${valuePairsHtml(incident, [["Area", [incident.location, incident.municipality].filter(Boolean).join(" · ")], ["Map coordinates", formatOperationCoordinates(incident)], ["Affected", incident.affectedCount], ["Reported by", incident.reporterName], ["Reporter contact", incident.reporterContact], ["Responding unit", incident.respondingUnit], ["Action taken", incident.actionTaken], ["Status", incident.status]])}</div>`;
   detail.classList.remove("hidden");
   document.getElementById("specialOpsCloseIncidentDetail").addEventListener("click", () => detail.classList.add("hidden"));
+  document.querySelectorAll("#specialOpsIncidentsTable tr").forEach(row => row.classList.toggle("is-selected", row.dataset.opsIncidentId === String(incidentId)));
   const marker = specialOperationsIncidentMarkerById.get(String(incidentId));
-  if (marker && specialOperationsMap) {
-    specialOperationsMap.setView(marker.getLatLng(), Math.max(12, Math.min(15, specialOperationsMap.getZoom())), { animate: true, duration: .3 });
-    marker.openPopup();
-  }
+  focusSpecialOperationMarker(marker);
 }
 
 function getActiveFieldOversight(updateNo) {
