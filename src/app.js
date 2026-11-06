@@ -476,7 +476,19 @@ function triggerSitrepCrossfade(mutatorFn) {
   setTimeout(() => {
     mutatorFn();
     region.classList.remove("crossfade-active");
+    replayDashboardCardEntrance();
   }, 150);
+}
+
+function replayDashboardCardEntrance() {
+  const cards = [...document.querySelectorAll("#govHeadlineLedger > button")];
+  if (!cards.length || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  cards.forEach((card, index) => {
+    card.classList.remove("dashboard-card-enter");
+    card.style.setProperty("--stagger-index", index);
+  });
+  void cards[0].offsetWidth;
+  cards.forEach(card => card.classList.add("dashboard-card-enter"));
 }
 
 // ============================================================================
@@ -2162,6 +2174,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     navOpcenBtn.classList.remove("is-active");
     secCue.innerHTML = `<i class="ri-eye-line"></i><span>View only</span>`;
     signInBtn.classList.toggle("hidden", Boolean(auth.currentUser));
+    replayDashboardCardEntrance();
   });
 
   navSpecialOpsBtn.addEventListener("click", async () => {
@@ -2785,5 +2798,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   renderGovernorScreen();
+  replayDashboardCardEntrance();
   renderOpcenScreen();
 });
